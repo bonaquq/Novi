@@ -37,6 +37,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.components.UserAvatarView
@@ -54,7 +55,15 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Tune
+import com.example.model.AudioAppSettings
 import com.example.model.UserProfile
+import com.example.ui.components.EqualizerView
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,11 +72,14 @@ fun ProfileScreen(
     onToggleDarkMode: (Boolean) -> Unit,
     userProfile: UserProfile = UserProfile(),
     onUpdateProfile: (name: String, handle: String, bio: String, avatarId: Int) -> Unit = { _, _, _, _ -> },
+    audioSettings: AudioAppSettings = AudioAppSettings(),
+    onUpdateAudioSettings: (AudioAppSettings) -> Unit = {},
+    onOpenFullSettings: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var isLosslessAudio by remember { mutableStateOf(true) }
-    var isKaraokeLyrics by remember { mutableStateOf(true) }
     var showEditProfileSheet by remember { mutableStateOf(false) }
+    var showEqualizerSheet by remember { mutableStateOf(false) }
+    val equalizerSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     // Edit form states
     var editName by remember(userProfile.name) { mutableStateOf(userProfile.name) }
@@ -114,18 +126,34 @@ fun ProfileScreen(
                         text = userProfile.name,
                         color = primaryTextColor,
                         fontSize = 22.sp,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
                     )
 
-                    Spacer(modifier = Modifier.height(2.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
-                        text = "${userProfile.handle} • ${userProfile.bio}",
-                        color = secondaryTextColor,
-                        fontSize = 14.sp
+                        text = userProfile.handle,
+                        color = if (isDarkMode) Color(0xFF10B981) else Color(0xFF00A86B),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        textAlign = TextAlign.Center
                     )
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    if (userProfile.bio.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(6.dp))
+
+                        Text(
+                            text = userProfile.bio,
+                            color = secondaryTextColor,
+                            fontSize = 14.sp,
+                            lineHeight = 20.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 24.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
 
                     // Edit Profile Button below user's name
                     OutlinedButton(
@@ -189,15 +217,47 @@ fun ProfileScreen(
 
             // Preferences Section
             item {
-                Text(
-                    text = "Preferences",
-                    color = primaryTextColor,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 20.dp)
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Audio & Settings",
+                        color = primaryTextColor,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text(
+                        text = "Configure",
+                        color = if (isDarkMode) Color(0xFF10B981) else Color(0xFF00A86B),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .clickable { onOpenFullSettings() }
+                            .testTag("open_full_settings_button")
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(12.dp))
+
+                // Equalizer Card (Acoustic, Jazz, Bass Boost, Custom interactive preview)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                ) {
+                    EqualizerView(
+                        settings = audioSettings,
+                        onSettingsChange = onUpdateAudioSettings,
+                        isDarkMode = isDarkMode
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
 
                 Column(
                     modifier = Modifier
@@ -207,31 +267,13 @@ fun ProfileScreen(
                         .border(1.dp, borderColor, RoundedCornerShape(16.dp))
                         .background(cardBg)
                 ) {
-                    // Dark / Light Mode Option
-                    SettingToggleItem(
-                        icon = if (isDarkMode) Icons.Default.DarkMode else Icons.Default.LightMode,
-                        title = "Dark Theme",
-                        subtitle = if (isDarkMode) "Enabled • Sleek dark aesthetic" else "Disabled • Clean light aesthetic",
-                        checked = isDarkMode,
-                        onCheckedChange = onToggleDarkMode,
-                        isDarkMode = isDarkMode,
-                        testTag = "dark_mode_toggle"
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(1.dp)
-                            .background(dividerColor)
-                    )
-
-                    // Lossless Audio Streaming Option
+                    // Audio Quality Option
                     SettingToggleItem(
                         icon = Icons.Default.Headphones,
-                        title = "Lossless Audio Streaming",
-                        subtitle = "24-bit / 96kHz Hi-Res sound",
-                        checked = isLosslessAudio,
-                        onCheckedChange = { isLosslessAudio = it },
+                        title = "Lossless Audio (${audioSettings.audioQuality.substringBefore(" (")})",
+                        subtitle = "Hi-Res studio sound with low jitter",
+                        checked = true,
+                        onCheckedChange = { onOpenFullSettings() },
                         isDarkMode = isDarkMode,
                         testTag = "lossless_audio_toggle"
                     )
@@ -243,15 +285,105 @@ fun ProfileScreen(
                             .background(dividerColor)
                     )
 
-                    // Synced Karaoke Lyrics Option
+                    // Crossfade Switch
                     SettingToggleItem(
-                        icon = Icons.Default.GraphicEq,
-                        title = "Synced Karaoke Lyrics",
-                        subtitle = "Auto-scroll and tap-to-seek lyrics",
-                        checked = isKaraokeLyrics,
-                        onCheckedChange = { isKaraokeLyrics = it },
+                        icon = Icons.Default.Sync,
+                        title = "Crossfade",
+                        subtitle = if (audioSettings.crossfadeEnabled) "${String.format("%.1f", audioSettings.crossfadeDurationSeconds)}s seamless track transition" else "Disabled",
+                        checked = audioSettings.crossfadeEnabled,
+                        onCheckedChange = { onUpdateAudioSettings(audioSettings.copy(crossfadeEnabled = it)) },
                         isDarkMode = isDarkMode,
-                        testTag = "karaoke_lyrics_toggle"
+                        testTag = "crossfade_toggle"
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(dividerColor)
+                    )
+
+                    // Gapless Playback
+                    SettingToggleItem(
+                        icon = Icons.Default.MusicNote,
+                        title = "Gapless Playback",
+                        subtitle = "Eliminates silence between live tracks",
+                        checked = audioSettings.gaplessPlayback,
+                        onCheckedChange = { onUpdateAudioSettings(audioSettings.copy(gaplessPlayback = it)) },
+                        isDarkMode = isDarkMode,
+                        testTag = "gapless_playback_toggle"
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(dividerColor)
+                    )
+
+                    // Mono Audio
+                    SettingToggleItem(
+                        icon = Icons.AutoMirrored.Filled.VolumeUp,
+                        title = "Mono Audio",
+                        subtitle = "Combines stereo channels for single earbud use",
+                        checked = audioSettings.monoAudio,
+                        onCheckedChange = { onUpdateAudioSettings(audioSettings.copy(monoAudio = it)) },
+                        isDarkMode = isDarkMode,
+                        testTag = "mono_audio_toggle"
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(dividerColor)
+                    )
+
+                    // Languages
+                    SettingToggleItem(
+                        icon = Icons.Default.Language,
+                        title = "Language",
+                        subtitle = audioSettings.language,
+                        checked = true,
+                        onCheckedChange = { onOpenFullSettings() },
+                        isDarkMode = isDarkMode,
+                        testTag = "language_toggle"
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(dividerColor)
+                    )
+
+                    // Developer Mode
+                    SettingToggleItem(
+                        icon = Icons.Default.Code,
+                        title = "Developer Mode",
+                        subtitle = if (audioSettings.developerMode) "Telemetry & buffer logs enabled" else "Disabled",
+                        checked = audioSettings.developerMode,
+                        onCheckedChange = { onUpdateAudioSettings(audioSettings.copy(developerMode = it)) },
+                        isDarkMode = isDarkMode,
+                        testTag = "developer_mode_toggle"
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(dividerColor)
+                    )
+
+                    // Dark Theme Option
+                    SettingToggleItem(
+                        icon = if (isDarkMode) Icons.Default.DarkMode else Icons.Default.LightMode,
+                        title = "Dark Theme",
+                        subtitle = if (isDarkMode) "Enabled • Sleek dark aesthetic" else "Disabled • Clean light aesthetic",
+                        checked = isDarkMode,
+                        onCheckedChange = onToggleDarkMode,
+                        isDarkMode = isDarkMode,
+                        testTag = "dark_mode_toggle"
                     )
                 }
             }

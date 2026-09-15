@@ -24,8 +24,16 @@ class MusicAudioEngine(private val scope: CoroutineScope) {
     private var currentFrequency = 110f
     private var currentBpm = 140
 
+    private var bassGain: Float = 1.0f
+    private var trebleGain: Float = 1.0f
+
     init {
         initAudioTrack()
+    }
+
+    fun updateEqualizer(bassGainMult: Float, trebleGainMult: Float) {
+        this.bassGain = bassGainMult.coerceIn(0.2f, 3.0f)
+        this.trebleGain = trebleGainMult.coerceIn(0.2f, 3.0f)
     }
 
     private fun initAudioTrack() {
@@ -114,13 +122,13 @@ class MusicAudioEngine(private val scope: CoroutineScope) {
                     }
                     val f = currentFrequency * pitchMultiplier
 
-                    // Rich sub + saw harmonic synth
-                    val sub = sin(2.0 * PI * f * time)
-                    val saw = sin(2.0 * PI * (f * 2) * time) * 0.5 + sin(2.0 * PI * (f * 3) * time) * 0.25
+                    // Rich sub + saw harmonic synth with dynamic EQ gain
+                    val sub = sin(2.0 * PI * f * time) * bassGain
+                    val saw = (sin(2.0 * PI * (f * 2) * time) * 0.5 + sin(2.0 * PI * (f * 3) * time) * 0.25) * trebleGain
                     val bassSynth = (sub * 0.6 + saw * 0.4 * lfo) * 0.45
 
                     // Combined sample with gentle limiter
-                    val sample = (kickWave * 0.45 + bassSynth * 0.55).coerceIn(-0.95, 0.95)
+                    val sample = (kickWave * 0.45 * bassGain + bassSynth * 0.55).coerceIn(-0.95, 0.95)
                     buffer[i] = (sample * Short.MAX_VALUE).toInt().toShort()
                     sampleIndex++
                 }

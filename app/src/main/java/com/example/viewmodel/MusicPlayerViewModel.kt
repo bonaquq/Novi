@@ -2,7 +2,9 @@ package com.example.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.audio.MusicAudioEngine
 import com.example.model.ArtworkType
+import com.example.model.AudioAppSettings
 import com.example.model.RepeatMode
 import com.example.model.SampleMusicData
 import com.example.model.Track
@@ -11,8 +13,11 @@ import com.example.model.UserProfile
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -43,9 +48,9 @@ class MusicPlayerViewModel : ViewModel() {
     val repeatMode: StateFlow<RepeatMode> = _repeatMode.asStateFlow()
 
     // Backward-compatible isRepeat
-    val isRepeat: StateFlow<Boolean> = MutableStateFlow(false).apply {
-        // Will be updated via repeatMode
-    }
+    val isRepeat: StateFlow<Boolean> = _repeatMode
+        .map { it != RepeatMode.OFF }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     private val _isNowPlayingExpanded = MutableStateFlow(false)
     val isNowPlayingExpanded: StateFlow<Boolean> = _isNowPlayingExpanded.asStateFlow()
@@ -61,8 +66,8 @@ class MusicPlayerViewModel : ViewModel() {
     private val _showWelcomeScreen = MutableStateFlow(false)
     val showWelcomeScreen: StateFlow<Boolean> = _showWelcomeScreen.asStateFlow()
 
-    // Dark / Light mode preference
-    private val _isDarkMode = MutableStateFlow(false)
+    // Dark / Light mode preference (Dark mode default)
+    private val _isDarkMode = MutableStateFlow(true)
     val isDarkMode: StateFlow<Boolean> = _isDarkMode.asStateFlow()
 
     // User Profile state
@@ -72,6 +77,14 @@ class MusicPlayerViewModel : ViewModel() {
     // User Playlists state
     private val _userPlaylists = MutableStateFlow(SampleMusicData.defaultPlaylists)
     val userPlaylists: StateFlow<List<UserPlaylist>> = _userPlaylists.asStateFlow()
+
+    // Audio Engine & Equalizer Settings state
+    private val _audioSettings = MutableStateFlow(AudioAppSettings())
+    val audioSettings: StateFlow<AudioAppSettings> = _audioSettings.asStateFlow()
+
+    // Flag to open dedicated Settings Screen
+    private val _isSettingsOpen = MutableStateFlow(false)
+    val isSettingsOpen: StateFlow<Boolean> = _isSettingsOpen.asStateFlow()
 
     private var progressJob: Job? = null
 
@@ -201,6 +214,10 @@ class MusicPlayerViewModel : ViewModel() {
         )
     }
 
+    fun updateProfile(name: String, handle: String, bio: String, avatarId: Int) {
+        updateUserProfile(name, handle, bio, avatarId)
+    }
+
     fun signIn(email: String, name: String) {
         _userProfile.value = _userProfile.value.copy(
             email = email.ifBlank { "user@novimusic.io" },
@@ -208,6 +225,10 @@ class MusicPlayerViewModel : ViewModel() {
             isLoggedIn = true
         )
         dismissWelcome()
+    }
+
+    fun signInUser(email: String, name: String) {
+        signIn(email, name)
     }
 
     fun createPlaylist(name: String, description: String) {
@@ -278,6 +299,27 @@ class MusicPlayerViewModel : ViewModel() {
                 }
             }
         }
+    }
+
+    fun updateAudioSettings(settings: AudioAppSettings) {
+        _audioSettings.value = settings
+        if (settings.equalizerEnabled) {
+            val bassBand = settings.bands.firstOrNull()?.gainDb ?: 0f
+            val trebleBand = settings.bands.lastOrNull()?.gainDb ?: 0f
+            val bassMult = 1.0f + (bassBand / 12f) * 0.8f + settings.bassBoostAmount * 0.5f
+            val trebleMult = 1.0f + (trebleBand / 12f) * 0.8f
+            audioEngine.updateEqualizer(bassMult, trebleMult)
+        } else {
+            audioEngine.updateEqualizer(1.0f, 1.0f)
+        }
+    }
+
+    fun openSettings() {
+        _isSettingsOpen.value = true
+    }
+
+    fun closeSettings() {
+        _isSettingsOpen.value = false
     }
 
     private fun stopProgressTracking() {

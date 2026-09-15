@@ -61,8 +61,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.LightMode
 import com.example.model.RepeatMode
 import com.example.model.Track
 import com.example.ui.components.TrackArtworkDisplay
@@ -76,7 +74,6 @@ fun NowPlayingScreen(
     isRepeat: Boolean,
     repeatMode: RepeatMode = if (isRepeat) RepeatMode.ALL else RepeatMode.OFF,
     isDarkMode: Boolean = false,
-    onToggleDarkMode: (() -> Unit)? = null,
     onCollapse: () -> Unit,
     onPlayPauseToggle: () -> Unit,
     onNextTrack: () -> Unit,
@@ -137,7 +134,7 @@ fun NowPlayingScreen(
                 .padding(horizontal = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // 1. Top Bar: Back Arrow (<), "Lyrics", Dark/Light toggle, Share (↗)
+            // 1. Top Bar: Back Arrow (<), "Lyrics", Share (↗)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -165,52 +162,28 @@ fun NowPlayingScreen(
                     fontWeight = FontWeight.SemiBold
                 )
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    if (onToggleDarkMode != null) {
-                        IconButton(
-                            onClick = onToggleDarkMode,
-                            modifier = Modifier
-                                .size(38.dp)
-                                .background(buttonBg, RoundedCornerShape(10.dp))
-                                .border(1.dp, buttonBorder, RoundedCornerShape(10.dp))
-                                .clip(RoundedCornerShape(10.dp))
-                                .testTag("now_playing_dark_mode_toggle")
-                        ) {
-                            Icon(
-                                imageVector = if (isDarkMode) Icons.Default.LightMode else Icons.Default.DarkMode,
-                                contentDescription = "Toggle Dark Mode",
-                                tint = if (isDarkMode) Color(0xFFFBBF24) else Color(0xFF4B5563),
-                                modifier = Modifier.size(18.dp)
-                            )
+                IconButton(
+                    onClick = {
+                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                            type = "text/plain"
+                            putExtra(Intent.EXTRA_SUBJECT, "Listening to ${track.title}")
+                            putExtra(Intent.EXTRA_TEXT, "Listening to ${track.title} by ${track.artist} on Novi")
                         }
-                    }
-
-                    IconButton(
-                        onClick = {
-                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                                type = "text/plain"
-                                putExtra(Intent.EXTRA_SUBJECT, "Listening to ${track.title}")
-                                putExtra(Intent.EXTRA_TEXT, "Listening to ${track.title} by ${track.artist} on Novi")
-                            }
-                            context.startActivity(Intent.createChooser(shareIntent, "Share Track"))
-                        },
-                        modifier = Modifier
-                            .size(38.dp)
-                            .background(buttonBg, RoundedCornerShape(10.dp))
-                            .border(1.dp, buttonBorder, RoundedCornerShape(10.dp))
-                            .clip(RoundedCornerShape(10.dp))
-                            .testTag("now_playing_share_button")
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                            contentDescription = "Share",
-                            tint = textPrimary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
+                        context.startActivity(Intent.createChooser(shareIntent, "Share Track"))
+                    },
+                    modifier = Modifier
+                        .size(38.dp)
+                        .background(buttonBg, RoundedCornerShape(10.dp))
+                        .border(1.dp, buttonBorder, RoundedCornerShape(10.dp))
+                        .clip(RoundedCornerShape(10.dp))
+                        .testTag("now_playing_share_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                        contentDescription = "Share",
+                        tint = textPrimary,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
 

@@ -30,6 +30,7 @@ import com.example.ui.screens.HomeScreen
 import com.example.ui.screens.NowPlayingScreen
 import com.example.ui.screens.ProfileScreen
 import com.example.ui.screens.SearchScreen
+import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.WelcomeScreen
 import com.example.ui.theme.MyApplicationTheme
 import com.example.viewmodel.MusicPlayerViewModel
@@ -67,12 +68,15 @@ fun MusicPlayerApp(
     val showWelcomeScreen by viewModel.showWelcomeScreen.collectAsState()
     val isDarkMode by viewModel.isDarkMode.collectAsState()
 
+    val isSettingsOpen by viewModel.isSettingsOpen.collectAsState()
+
     var isSearchActive by remember { mutableStateOf(false) }
 
-    // Handle back button when Now Playing is full screen or Search is active
-    BackHandler(enabled = isNowPlayingExpanded || isSearchActive || showWelcomeScreen) {
+    // Handle back button when Now Playing is full screen, Settings open, or Search is active
+    BackHandler(enabled = isNowPlayingExpanded || isSettingsOpen || isSearchActive || showWelcomeScreen) {
         when {
             isNowPlayingExpanded -> viewModel.collapseNowPlaying()
+            isSettingsOpen -> viewModel.closeSettings()
             isSearchActive -> isSearchActive = false
             showWelcomeScreen -> viewModel.dismissWelcome()
         }
@@ -85,13 +89,31 @@ fun MusicPlayerApp(
     ) {
         // Screen 1: Welcome / Onboarding Screen ("Music without borders")
         if (showWelcomeScreen) {
+            val userProfile by viewModel.userProfile.collectAsState()
             WelcomeScreen(
-                onGetStarted = { viewModel.dismissWelcome() }
+                onGetStarted = { viewModel.dismissWelcome() },
+                onSignIn = { email, name ->
+                    viewModel.signInUser(email, name)
+                    viewModel.dismissWelcome()
+                }
             )
         } else {
             // Main App Content with Bottom Bar
+            val userProfile by viewModel.userProfile.collectAsState()
+            val userPlaylists by viewModel.userPlaylists.collectAsState()
+            val audioSettings by viewModel.audioSettings.collectAsState()
+            val repeatMode by viewModel.repeatMode.collectAsState()
+
             Box(modifier = Modifier.fillMaxSize()) {
-                if (isSearchActive) {
+                if (isSettingsOpen) {
+                    SettingsScreen(
+                        settings = audioSettings,
+                        onSettingsChange = { viewModel.updateAudioSettings(it) },
+                        isDarkMode = isDarkMode,
+                        onToggleDarkMode = { viewModel.toggleDarkMode(it) },
+                        onBack = { viewModel.closeSettings() }
+                    )
+                } else if (isSearchActive) {
                     SearchScreen(
                         query = searchQuery,
                         onQueryChange = { viewModel.setSearchQuery(it) },
@@ -100,26 +122,36 @@ fun MusicPlayerApp(
                         isPlaying = isPlaying,
                         onTrackSelected = {
                             viewModel.playTrack(it)
-                            viewModel.expandNowPlaying()
-                            isSearchActive = false
+                            // Play in the playing bar without full expansion as requested
                         },
+                        onBack = { isSearchActive = false },
                         isDarkMode = isDarkMode
                     )
                 } else {
                     when (selectedTab) {
                         0 -> {
-                            // Screen 2: Home / Discover Screen (IDM Essentials & Recently Listened)
+                            // Screen 2: Home Screen (Playlists & Recently Listened)
                             HomeScreen(
                                 tracks = tracks,
                                 currentTrack = currentTrack,
                                 isPlaying = isPlaying,
                                 onTrackSelected = {
                                     viewModel.playTrack(it)
-                                    viewModel.expandNowPlaying()
+                                    // Plays directly in the playing bar
                                 },
                                 onOpenSearch = { isSearchActive = true },
                                 onToggleFavorite = { viewModel.toggleFavorite(it) },
                                 onOpenWelcome = { viewModel.showWelcome() },
+                                onNavigateToProfile = { viewModel.selectTab(2) },
+                                userProfile = userProfile,
+                                userPlaylists = userPlaylists,
+                                onCreatePlaylist = { name, desc ->
+                                    viewModel.createPlaylist(name, desc)
+                                },
+                                onPlayPlaylist = { playlist ->
+                                    viewModel.playPlaylist(playlist)
+                                },
+                                onOpenSettings = { viewModel.openSettings() },
                                 isDarkMode = isDarkMode
                             )
                         }
@@ -130,7 +162,6 @@ fun MusicPlayerApp(
                                 isPlaying = isPlaying,
                                 onTrackSelected = {
                                     viewModel.playTrack(it)
-                                    viewModel.expandNowPlaying()
                                 },
                                 isDarkMode = isDarkMode
                             )
@@ -138,20 +169,28 @@ fun MusicPlayerApp(
                         2 -> {
                             ProfileScreen(
                                 isDarkMode = isDarkMode,
-                                onToggleDarkMode = { viewModel.toggleDarkMode(it) }
+                                onToggleDarkMode = { viewModel.toggleDarkMode(it) },
+                                userProfile = userProfile,
+                                onUpdateProfile = { name, handle, bio, avatarId ->
+                                    viewModel.updateProfile(name, handle, bio, avatarId)
+                                },
+                                audioSettings = audioSettings,
+                                onUpdateAudioSettings = { viewModel.updateAudioSettings(it) },
+                                onOpenFullSettings = { viewModel.openSettings() }
                             )
                         }
                     }
                 }
 
-                // Bottom Navigation Bar with Floating Mini Player (Screenshot 2)
-                if (!isNowPlayingExpanded) {
+                // Bottom Navigation Bar with Floating Mini Player
+                if (!isNowPlayingExpanded && !isSettingsOpen) {
                     ModernBottomBar(
                         currentTrack = currentTrack,
                         isPlaying = isPlaying,
                         selectedTab = if (isSearchActive) -1 else selectedTab,
                         onTabSelected = { tabIndex ->
                             isSearchActive = false
+                            viewModel.closeSettings()
                             viewModel.selectTab(tabIndex)
                         },
                         onPlayPauseToggle = { viewModel.togglePlayPause() },
@@ -164,6 +203,7 @@ fun MusicPlayerApp(
         }
 
         // Screen 3: Fullscreen Now Playing / Lyrics Screen (Slide In/Out Transition)
+        val repeatMode by viewModel.repeatMode.collectAsState()
         AnimatedContent(
             targetState = isNowPlayingExpanded,
             transitionSpec = {
@@ -179,6 +219,8 @@ fun MusicPlayerApp(
                     currentPositionSeconds = currentPositionSeconds,
                     isShuffle = isShuffle,
                     isRepeat = isRepeat,
+                    repeatMode = repeatMode,
+                    isDarkMode = isDarkMode,
                     onCollapse = { viewModel.collapseNowPlaying() },
                     onPlayPauseToggle = { viewModel.togglePlayPause() },
                     onNextTrack = { viewModel.nextTrack() },
