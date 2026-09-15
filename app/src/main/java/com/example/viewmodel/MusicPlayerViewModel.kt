@@ -1,8 +1,13 @@
 package com.example.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.audio.MusicAudioEngine
+import com.example.data.local.AppDatabase
+import com.example.data.repository.AuthResult
+import com.example.data.repository.UserAccountRepository
+import com.example.data.repository.MusicBrainzRepository
 import com.example.model.ArtworkType
 import com.example.model.AudioAppSettings
 import com.example.model.RepeatMode
@@ -21,24 +26,77 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-class MusicPlayerViewModel : ViewModel() {
+class MusicPlayerViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val database = AppDatabase.getDatabase(application)
+    val userAccountRepo = UserAccountRepository(database.userAccountDao())
+    val musicBrainzRepo = MusicBrainzRepository()
 
     private val audioEngine = MusicAudioEngine(viewModelScope)
 
-    private val _tracks = MutableStateFlow(SampleMusicData.tracks)
+    private val _isMusicBrainzLoading = MutableStateFlow(false)
+    val isMusicBrainzLoading: StateFlow<Boolean> = _isMusicBrainzLoading.asStateFlow()
+
+    private val _tracks = MutableStateFlow(musicBrainzRepo.getCuratedMusicBrainzTracks("all"))
     val tracks: StateFlow<List<Track>> = _tracks.asStateFlow()
 
-    // Default current track: Bone by Sonic Youth (from screenshot 2 and 3!)
     private val _currentTrack = MutableStateFlow(
-        SampleMusicData.tracks.find { it.title == "Bone" } ?: SampleMusicData.tracks.first()
+        musicBrainzRepo.getCuratedMusicBrainzTracks("all").first()
     )
     val currentTrack: StateFlow<Track> = _currentTrack.asStateFlow()
 
-    private val _isPlaying = MutableStateFlow(true)
+    init {
+        viewModelScope.launch {
+            userAccountRepo.initializeDefaultAccountsIfNeeded()
+            loadTracksFromMusicBrainz("all")
+        }
+    }
+
+    fun loadTracksFromMusicBrainz(genreOrQuery: String = "all") {
+        viewModelScope.launch {
+            _isMusicBrainzLoading.value = true
+            val result = if (genreOrQuery.equals("all", ignoreCase = true)) {
+                musicBrainzRepo.getTracksByGenre("all")
+            } else {
+                musicBrainzRepo.getTracksByGenre(genreOrQuery)
+            }
+
+            result.onSuccess { fetchedTracks ->
+                if (fetchedTracks.isNotEmpty()) {
+                    _tracks.value = fetchedTracks
+                    if (_tracks.value.none { it.id == _currentTrack.value.id }) {
+                        _currentTrack.value = fetchedTracks.first()
+                    }
+                }
+            }
+            _isMusicBrainzLoading.value = false
+        }
+    }
+
+    private var searchJob: Job? = null
+    fun searchMusicBrainz(query: String) {
+        _searchQuery.value = query
+        searchJob?.cancel()
+        if (query.isBlank()) {
+            loadTracksFromMusicBrainz("all")
+            return
+        }
+
+        searchJob = viewModelScope.launch {
+            delay(500) // Debounce for MusicBrainz rate limits
+            _isMusicBrainzLoading.value = true
+            val result = musicBrainzRepo.getTracksByQuery(query)
+            result.onSuccess { fetchedTracks ->
+                _tracks.value = fetchedTracks
+            }
+            _isMusicBrainzLoading.value = false
+        }
+    }
+
+    private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
 
-    // Default position: 24s so the highlighted lyric line from screenshot 3 ("Walk on by, look to the left") is active!
-    private val _currentPositionSeconds = MutableStateFlow(24)
+    private val _currentPositionSeconds = MutableStateFlow(0)
     val currentPositionSeconds: StateFlow<Int> = _currentPositionSeconds.asStateFlow()
 
     private val _isShuffle = MutableStateFlow(false)
@@ -55,6 +113,10 @@ class MusicPlayerViewModel : ViewModel() {
     private val _isNowPlayingExpanded = MutableStateFlow(false)
     val isNowPlayingExpanded: StateFlow<Boolean> = _isNowPlayingExpanded.asStateFlow()
 
+    // Controls whether the floating now playing bar is visible on screen (hidden initially until playback starts)
+    private val _isNowPlayingVisible = MutableStateFlow(false)
+    val isNowPlayingVisible: StateFlow<Boolean> = _isNowPlayingVisible.asStateFlow()
+
     // 0: Home, 1: Favorites, 2: Profile
     private val _selectedTab = MutableStateFlow(0)
     val selectedTab: StateFlow<Int> = _selectedTab.asStateFlow()
@@ -62,8 +124,8 @@ class MusicPlayerViewModel : ViewModel() {
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
-    // Whether welcome/onboarding screen is shown
-    private val _showWelcomeScreen = MutableStateFlow(false)
+    // Whether welcome/onboarding screen is shown (default true when opened)
+    private val _showWelcomeScreen = MutableStateFlow(true)
     val showWelcomeScreen: StateFlow<Boolean> = _showWelcomeScreen.asStateFlow()
 
     // Dark / Light mode preference (Dark mode default)
@@ -86,19 +148,21 @@ class MusicPlayerViewModel : ViewModel() {
     private val _isSettingsOpen = MutableStateFlow(false)
     val isSettingsOpen: StateFlow<Boolean> = _isSettingsOpen.asStateFlow()
 
+    // Selected Playlist for viewing detail screen
+    private val _selectedPlaylist = MutableStateFlow<UserPlaylist?>(null)
+    val selectedPlaylist: StateFlow<UserPlaylist?> = _selectedPlaylist.asStateFlow()
+
     private var progressJob: Job? = null
 
     init {
-        // Start playback of initial track
-        val initial = _currentTrack.value
-        audioEngine.play(initial.baseFrequency, initial.tempoBpm)
-        startProgressTracking()
+        // App starts in stopped state; playback begins on user interaction
     }
 
     fun playTrack(track: Track) {
         _currentTrack.value = track
         _currentPositionSeconds.value = 0
         _isPlaying.value = true
+        _isNowPlayingVisible.value = true
         audioEngine.play(track.baseFrequency, track.tempoBpm)
         startProgressTracking()
     }
@@ -110,10 +174,27 @@ class MusicPlayerViewModel : ViewModel() {
             stopProgressTracking()
         } else {
             _isPlaying.value = true
+            _isNowPlayingVisible.value = true
             val track = _currentTrack.value
             audioEngine.play(track.baseFrequency, track.tempoBpm)
             startProgressTracking()
         }
+    }
+
+    fun stopPlayback() {
+        _isPlaying.value = false
+        audioEngine.pause()
+        stopProgressTracking()
+        _currentPositionSeconds.value = 0
+    }
+
+    fun dismissNowPlayingBar() {
+        stopPlayback()
+        _isNowPlayingVisible.value = false
+    }
+
+    fun showNowPlayingBar() {
+        _isNowPlayingVisible.value = true
     }
 
     fun nextTrack() {
@@ -205,33 +286,168 @@ class MusicPlayerViewModel : ViewModel() {
         _isDarkMode.value = enabled
     }
 
-    fun updateUserProfile(name: String, handle: String, bio: String, avatarId: Int) {
-        _userProfile.value = _userProfile.value.copy(
+    fun updateUserProfile(
+        name: String,
+        handle: String,
+        bio: String,
+        avatarId: Int,
+        customAvatarUri: String? = _userProfile.value.customAvatarUri
+    ) {
+        val updated = _userProfile.value.copy(
             name = name.ifBlank { "Audrey V." },
             handle = handle.ifBlank { "@audreymusic" },
             bio = bio,
-            avatarId = avatarId
+            avatarId = avatarId,
+            customAvatarUri = customAvatarUri
         )
+        _userProfile.value = updated
+
+        // Persist updates to DB
+        viewModelScope.launch {
+            if (updated.email.isNotBlank()) {
+                userAccountRepo.updateProfile(
+                    email = updated.email,
+                    name = updated.name,
+                    handle = updated.handle,
+                    bio = updated.bio,
+                    avatarId = updated.avatarId,
+                    customAvatarUri = updated.customAvatarUri
+                )
+            }
+        }
     }
 
-    fun updateProfile(name: String, handle: String, bio: String, avatarId: Int) {
-        updateUserProfile(name, handle, bio, avatarId)
+    fun updateProfile(name: String, handle: String, bio: String, avatarId: Int, customAvatarUri: String? = _userProfile.value.customAvatarUri) {
+        updateUserProfile(name, handle, bio, avatarId, customAvatarUri)
     }
 
-    fun signIn(email: String, name: String) {
-        _userProfile.value = _userProfile.value.copy(
-            email = email.ifBlank { "user@novimusic.io" },
-            name = name.ifBlank { email.substringBefore("@").replaceFirstChar { it.uppercase() } },
-            isLoggedIn = true
+    fun setCustomProfilePicture(uriString: String) {
+        _userProfile.value = _userProfile.value.copy(customAvatarUri = uriString)
+        viewModelScope.launch {
+            if (_userProfile.value.email.isNotBlank()) {
+                userAccountRepo.updateProfile(
+                    email = _userProfile.value.email,
+                    name = _userProfile.value.name,
+                    handle = _userProfile.value.handle,
+                    bio = _userProfile.value.bio,
+                    avatarId = _userProfile.value.avatarId,
+                    customAvatarUri = uriString
+                )
+            }
+        }
+    }
+
+    fun removeCustomProfilePicture() {
+        _userProfile.value = _userProfile.value.copy(customAvatarUri = null)
+        viewModelScope.launch {
+            if (_userProfile.value.email.isNotBlank()) {
+                userAccountRepo.updateProfile(
+                    email = _userProfile.value.email,
+                    name = _userProfile.value.name,
+                    handle = _userProfile.value.handle,
+                    bio = _userProfile.value.bio,
+                    avatarId = _userProfile.value.avatarId,
+                    customAvatarUri = null
+                )
+            }
+        }
+    }
+
+    suspend fun loginUser(email: String, password: String): String? {
+        val result = userAccountRepo.login(email, password)
+        return when (result) {
+            is AuthResult.Success -> {
+                val acc = result.account
+                val genres = acc.favoriteGenres.split(",").filter { it.isNotBlank() }
+                _userProfile.value = _userProfile.value.copy(
+                    name = acc.name,
+                    email = acc.email,
+                    handle = acc.handle,
+                    bio = acc.bio,
+                    avatarId = acc.avatarId,
+                    customAvatarUri = acc.customAvatarUri,
+                    favoriteGenres = if (genres.isNotEmpty()) genres else listOf("IDM", "Electronic"),
+                    memberSince = acc.memberSince,
+                    isLoggedIn = true
+                )
+                dismissWelcome()
+                null // null indicates success
+            }
+            is AuthResult.Error -> result.message
+        }
+    }
+
+    suspend fun registerUser(
+        name: String,
+        email: String,
+        password: String,
+        handle: String = "",
+        selectedGenres: List<String> = listOf("Electronic", "IDM"),
+        customAvatarUri: String? = null
+    ): String? {
+        val result = userAccountRepo.registerAccount(
+            name = name,
+            email = email,
+            password = password,
+            handle = handle,
+            genres = selectedGenres,
+            customAvatarUri = customAvatarUri
         )
-        dismissWelcome()
+        return when (result) {
+            is AuthResult.Success -> {
+                val acc = result.account
+                val genres = acc.favoriteGenres.split(",").filter { it.isNotBlank() }
+                _userProfile.value = _userProfile.value.copy(
+                    name = acc.name,
+                    email = acc.email,
+                    handle = acc.handle,
+                    bio = acc.bio,
+                    avatarId = acc.avatarId,
+                    customAvatarUri = acc.customAvatarUri,
+                    favoriteGenres = if (genres.isNotEmpty()) genres else selectedGenres,
+                    memberSince = acc.memberSince,
+                    isLoggedIn = true
+                )
+                dismissWelcome()
+                null // null indicates success
+            }
+            is AuthResult.Error -> result.message
+        }
     }
 
-    fun signInUser(email: String, name: String) {
-        signIn(email, name)
+    fun logOut() {
+        stopPlayback()
+        _userProfile.value = _userProfile.value.copy(isLoggedIn = false)
+        _showWelcomeScreen.value = true
     }
 
-    fun createPlaylist(name: String, description: String) {
+    fun openWelcomeScreen() {
+        _showWelcomeScreen.value = true
+    }
+
+    fun openPlaylist(playlist: UserPlaylist) {
+        _selectedPlaylist.value = playlist
+    }
+
+    fun closePlaylist() {
+        _selectedPlaylist.value = null
+    }
+
+    fun updatePlaylist(updatedPlaylist: UserPlaylist) {
+        _userPlaylists.value = _userPlaylists.value.map {
+            if (it.id == updatedPlaylist.id) updatedPlaylist else it
+        }
+        if (_selectedPlaylist.value?.id == updatedPlaylist.id) {
+            _selectedPlaylist.value = updatedPlaylist
+        }
+    }
+
+    fun createPlaylist(
+        name: String,
+        description: String,
+        customImageUri: String? = null,
+        artworkType: ArtworkType = ArtworkType.APHEX_TWIN
+    ) {
         val newId = "p_${System.currentTimeMillis()}"
         val gradients = listOf(
             0xFF10B981 to 0xFF047857,
@@ -241,7 +457,6 @@ class MusicPlayerViewModel : ViewModel() {
             0xFFF59E0B to 0xFFB45309
         )
         val (start, end) = gradients.random()
-        val artworks = listOf(ArtworkType.APHEX_TWIN, ArtworkType.BOARDS_OF_CANADA, ArtworkType.DEPECHE_MODE, ArtworkType.WOODZ)
         val newPlaylist = UserPlaylist(
             id = newId,
             name = name.ifBlank { "My Playlist" },
@@ -249,16 +464,28 @@ class MusicPlayerViewModel : ViewModel() {
             trackCount = 0,
             coverGradientStart = start,
             coverGradientEnd = end,
-            artworkType = artworks.random(),
+            artworkType = artworkType,
+            customImageUri = customImageUri,
             trackIds = emptyList()
         )
         _userPlaylists.value = listOf(newPlaylist) + _userPlaylists.value
     }
 
-    fun playPlaylist(playlist: UserPlaylist) {
+    fun playPlaylist(playlist: UserPlaylist, shuffle: Boolean = false) {
         val list = _tracks.value
-        val targetTrack = playlist.trackIds.firstNotNullOfOrNull { id -> list.find { it.id == id } }
-            ?: list.firstOrNull()
+        val playlistTracks = if (playlist.trackIds.isNotEmpty()) {
+            val trackMap = list.associateBy { it.id }
+            playlist.trackIds.mapNotNull { trackMap[it] }
+        } else {
+            list.take(4)
+        }
+
+        val targetTrack = if (shuffle) {
+            playlistTracks.shuffled().firstOrNull() ?: list.firstOrNull()
+        } else {
+            playlistTracks.firstOrNull() ?: list.firstOrNull()
+        }
+
         targetTrack?.let { playTrack(it) }
     }
 

@@ -32,7 +32,8 @@ data class Track(
     val accentGlowColor: Long = 0xFF10B981,
     val baseFrequency: Float = 110f,
     val tempoBpm: Int = 120,
-    val isFavorite: Boolean = false
+    val isFavorite: Boolean = false,
+    val customArtworkUri: String? = null
 ) {
     val formattedDuration: String
         get() {
@@ -49,12 +50,15 @@ enum class RepeatMode {
 }
 
 data class UserProfile(
-    val name: String = "Audrey V.",
-    val handle: String = "@audreymusic",
-    val bio: String = "IDM & ambient lover. Always hunting for new sounds.",
+    val name: String = "",
+    val handle: String = "",
+    val bio: String = "Music lover & sound explorer",
     val avatarId: Int = 1,
-    val email: String = "audrey.v@novimusic.io",
-    val isLoggedIn: Boolean = false
+    val customAvatarUri: String? = null,
+    val email: String = "",
+    val isLoggedIn: Boolean = false,
+    val favoriteGenres: List<String> = emptyList(),
+    val memberSince: String = "September 2026"
 )
 
 data class UserPlaylist(
@@ -65,6 +69,7 @@ data class UserPlaylist(
     val coverGradientStart: Long = 0xFF10B981,
     val coverGradientEnd: Long = 0xFF047857,
     val artworkType: ArtworkType = ArtworkType.APHEX_TWIN,
+    val customImageUri: String? = null,
     val trackIds: List<String> = emptyList()
 )
 
@@ -82,48 +87,7 @@ data class EssentialCard(
 object SampleMusicData {
     val categories = listOf("All", "IDM", "Rock", "Pop", "Alternative", "Electronic", "Ambient")
 
-    val defaultPlaylists = listOf(
-        UserPlaylist(
-            id = "p1",
-            name = "Chill IDM",
-            description = "Glitch textures & ambient beats",
-            trackCount = 6,
-            coverGradientStart = 0xFF10B981,
-            coverGradientEnd = 0xFF047857,
-            artworkType = ArtworkType.APHEX_TWIN,
-            trackIds = listOf("t4", "t2", "t6")
-        ),
-        UserPlaylist(
-            id = "p2",
-            name = "Night Drive",
-            description = "Dark synths & nocturnal rhythms",
-            trackCount = 4,
-            coverGradientStart = 0xFF3B82F6,
-            coverGradientEnd = 0xFF1D4ED8,
-            artworkType = ArtworkType.DEPECHE_MODE,
-            trackIds = listOf("t2", "t7", "t1")
-        ),
-        UserPlaylist(
-            id = "p3",
-            name = "Glitch & Ambient",
-            description = "Warped melodies and warmth",
-            trackCount = 5,
-            coverGradientStart = 0xFF8B5CF6,
-            coverGradientEnd = 0xFF6D28D9,
-            artworkType = ArtworkType.BOARDS_OF_CANADA,
-            trackIds = listOf("t6", "t5", "t4")
-        ),
-        UserPlaylist(
-            id = "p4",
-            name = "Focus Beats",
-            description = "Low distractions, deep flow",
-            trackCount = 8,
-            coverGradientStart = 0xFFF59E0B,
-            coverGradientEnd = 0xFFB45309,
-            artworkType = ArtworkType.WOODZ,
-            trackIds = listOf("t3", "t1", "t7")
-        )
-    )
+    val defaultPlaylists = emptyList<UserPlaylist>()
 
     val boneLyrics = listOf(
         LyricLine(0, "Dry as a bone, take it to heart"),

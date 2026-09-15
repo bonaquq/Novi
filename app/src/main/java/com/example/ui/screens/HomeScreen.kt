@@ -69,8 +69,17 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material.icons.filled.AddPhotoAlternate
+import com.example.model.ArtworkType
 import com.example.model.SampleMusicData
 import com.example.model.Track
 import com.example.model.UserPlaylist
@@ -91,8 +100,9 @@ fun HomeScreen(
     onNavigateToProfile: () -> Unit,
     userProfile: UserProfile = UserProfile(),
     userPlaylists: List<UserPlaylist> = SampleMusicData.defaultPlaylists,
-    onCreatePlaylist: (name: String, description: String) -> Unit = { _, _ -> },
+    onCreatePlaylist: (name: String, description: String, customImageUri: String?, artworkType: ArtworkType) -> Unit = { _, _, _, _ -> },
     onPlayPlaylist: (UserPlaylist) -> Unit = {},
+    onOpenPlaylist: (UserPlaylist) -> Unit = {},
     onOpenSettings: () -> Unit = {},
     modifier: Modifier = Modifier,
     isDarkMode: Boolean = false
@@ -114,7 +124,18 @@ fun HomeScreen(
     var showCreatePlaylistSheet by remember { mutableStateOf(false) }
     var newPlaylistName by remember { mutableStateOf("") }
     var newPlaylistDesc by remember { mutableStateOf("") }
+    var newPlaylistImageUri by remember { mutableStateOf<String?>(null) }
+    var newPlaylistArtworkType by remember { mutableStateOf(ArtworkType.APHEX_TWIN) }
     val playlistSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+        onResult = { uri: Uri? ->
+            if (uri != null) {
+                newPlaylistImageUri = uri.toString()
+            }
+        }
+    )
 
     // Filter tracks based on category if not All
     val filteredTracks = remember(selectedCategory, tracks) {
@@ -164,7 +185,7 @@ fun HomeScreen(
                                 modifier = Modifier.background(if (isDarkMode) Color(0xFF1A1D24) else Color.White)
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text("Account (${userProfile.name})", color = textPrimary) },
+                                    text = { Text("Account (${userProfile.name.ifBlank { "Profile" }})", color = textPrimary) },
                                     leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = Color(0xFF10B981)) },
                                     onClick = {
                                         showAccountMenu = false
@@ -215,15 +236,47 @@ fun HomeScreen(
                             }
                         }
 
-                        // App Name "Novi" (Capital N) next to user profile
-                        Text(
-                            text = "Novi",
-                            color = textPrimary,
-                            fontSize = 22.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            letterSpacing = (-0.5).sp,
-                            modifier = Modifier.testTag("app_branding_novi")
-                        )
+                        // App Name "Novi" (Capital N) next to user profile + Highlighted Beta Badge
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "Novi",
+                                color = textPrimary,
+                                fontSize = 22.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = (-0.5).sp,
+                                modifier = Modifier.testTag("app_branding_novi")
+                            )
+
+                            // Highlighted Beta Box
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(
+                                        if (isDarkMode) Color(0xFF10B981).copy(alpha = 0.22f)
+                                        else Color(0xFF00A86B).copy(alpha = 0.15f)
+                                    )
+                                    .border(
+                                        1.dp,
+                                        if (isDarkMode) Color(0xFF10B981).copy(alpha = 0.5f)
+                                        else Color(0xFF00A86B).copy(alpha = 0.4f),
+                                        RoundedCornerShape(6.dp)
+                                    )
+                                    .padding(horizontal = 7.dp, vertical = 2.5.dp)
+                                    .testTag("novi_beta_badge"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "BETA",
+                                    color = if (isDarkMode) Color(0xFF34D399) else Color(0xFF00875A),
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    letterSpacing = 0.8.sp
+                                )
+                            }
+                        }
                     }
 
                     // Right: Outlined Action Buttons: Search and Notifications
@@ -367,6 +420,7 @@ fun HomeScreen(
                         PlaylistItemCard(
                             playlist = playlist,
                             onPlay = { onPlayPlaylist(playlist) },
+                            onOpen = { onOpenPlaylist(playlist) },
                             isDarkMode = isDarkMode
                         )
                     }
@@ -427,7 +481,8 @@ fun HomeScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 24.dp)
-                        .padding(bottom = 36.dp)
+                        .padding(bottom = 36.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
                         text = "New Playlist",
@@ -439,12 +494,84 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.height(6.dp))
 
                     Text(
-                        text = "Give your custom playlist a name and mood description",
+                        text = "Give your playlist a title, description, and custom cover art",
                         color = textSecondary,
-                        fontSize = 14.sp
+                        fontSize = 13.sp,
+                        textAlign = TextAlign.Center
                     )
 
-                    Spacer(modifier = Modifier.height(18.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Cover Art Preview & Pick Affordance
+                    Box(
+                        modifier = Modifier
+                            .size(110.dp)
+                            .shadow(8.dp, RoundedCornerShape(16.dp))
+                            .clip(RoundedCornerShape(16.dp))
+                            .border(1.5.dp, borderColor, RoundedCornerShape(16.dp))
+                            .clickable {
+                                photoPickerLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
+                            }
+                            .testTag("choose_cover_button"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        TrackArtworkDisplay(
+                            artworkType = newPlaylistArtworkType,
+                            customImageUri = newPlaylistImageUri,
+                            modifier = Modifier.fillMaxSize()
+                        )
+
+                        // Camera icon overlay
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(6.dp)
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(Color.Black.copy(alpha = 0.65f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AddPhotoAlternate,
+                                contentDescription = "Pick Photo",
+                                tint = Color.White,
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Choose Custom Photo button
+                    OutlinedButton(
+                        onClick = {
+                            photoPickerLauncher.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                            )
+                        },
+                        shape = RoundedCornerShape(18.dp),
+                        border = BorderStroke(1.dp, if (isDarkMode) Color(0xFF10B981) else Color(0xFF00A86B)),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = if (isDarkMode) Color(0xFF10B981) else Color(0xFF00A86B)
+                        ),
+                        modifier = Modifier.testTag("pick_custom_cover_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AddPhotoAlternate,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (newPlaylistImageUri != null) "Change Custom Image" else "Choose Custom Cover Image",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
 
                     OutlinedTextField(
                         value = newPlaylistName,
@@ -491,7 +618,10 @@ fun HomeScreen(
                     Button(
                         onClick = {
                             if (newPlaylistName.isNotBlank()) {
-                                onCreatePlaylist(newPlaylistName, newPlaylistDesc)
+                                onCreatePlaylist(newPlaylistName, newPlaylistDesc, newPlaylistImageUri, newPlaylistArtworkType)
+                                newPlaylistName = ""
+                                newPlaylistDesc = ""
+                                newPlaylistImageUri = null
                                 showCreatePlaylistSheet = false
                             }
                         },
@@ -623,6 +753,7 @@ fun HomeScreen(
 fun PlaylistItemCard(
     playlist: UserPlaylist,
     onPlay: () -> Unit,
+    onOpen: () -> Unit = onPlay,
     modifier: Modifier = Modifier,
     isDarkMode: Boolean = false
 ) {
@@ -636,10 +767,10 @@ fun PlaylistItemCard(
             .border(1.dp, borderCol, RoundedCornerShape(16.dp))
             .clip(RoundedCornerShape(16.dp))
             .background(cardBg)
-            .clickable { onPlay() }
+            .clickable { onOpen() }
             .testTag("playlist_card_${playlist.id}")
     ) {
-        // Center Line-Art Illustration with soft gradient background
+        // Center Line-Art Illustration or Custom Image with soft background
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -648,6 +779,7 @@ fun PlaylistItemCard(
         ) {
             TrackArtworkDisplay(
                 artworkType = playlist.artworkType,
+                customImageUri = playlist.customImageUri,
                 modifier = Modifier.fillMaxSize()
             )
         }

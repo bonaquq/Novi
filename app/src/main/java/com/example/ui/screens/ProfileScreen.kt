@@ -1,7 +1,13 @@
 package com.example.ui.screens
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,17 +20,41 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.AddPhotoAlternate
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Headphones
+import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,32 +68,14 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.ui.components.UserAvatarView
-
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.rememberModalBottomSheetState
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
-import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.Tune
 import com.example.model.AudioAppSettings
 import com.example.model.UserProfile
 import com.example.ui.components.EqualizerView
+import com.example.ui.components.ProfilePhotoCropperDialog
+import com.example.ui.components.UserAvatarView
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -71,23 +83,50 @@ fun ProfileScreen(
     isDarkMode: Boolean,
     onToggleDarkMode: (Boolean) -> Unit,
     userProfile: UserProfile = UserProfile(),
-    onUpdateProfile: (name: String, handle: String, bio: String, avatarId: Int) -> Unit = { _, _, _, _ -> },
+    onUpdateProfile: (name: String, handle: String, bio: String, avatarId: Int, customAvatarUri: String?) -> Unit = { _, _, _, _, _ -> },
     audioSettings: AudioAppSettings = AudioAppSettings(),
     onUpdateAudioSettings: (AudioAppSettings) -> Unit = {},
     onOpenFullSettings: () -> Unit = {},
+    onLogOut: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showEditProfileSheet by remember { mutableStateOf(false) }
-    var showEqualizerSheet by remember { mutableStateOf(false) }
-    val equalizerSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showLanguageSheet by remember { mutableStateOf(false) }
+    val editSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val languageSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    // Image Picker and Cropper State
+    var rawSelectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    var showCropperDialog by remember { mutableStateOf(false) }
+
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            rawSelectedImageUri = uri
+            showCropperDialog = true
+        }
+    }
+
+    val supportedLanguages = listOf(
+        "English (US)" to "English (United States)",
+        "English (UK)" to "English (United Kingdom)",
+        "Español" to "Spanish",
+        "Français" to "French",
+        "Deutsch" to "German",
+        "日本語" to "Japanese",
+        "한국어" to "Korean",
+        "Português" to "Portuguese",
+        "Italiano" to "Italian",
+        "中文" to "Chinese (Simplified)"
+    )
 
     // Edit form states
     var editName by remember(userProfile.name) { mutableStateOf(userProfile.name) }
     var editHandle by remember(userProfile.handle) { mutableStateOf(userProfile.handle) }
     var editBio by remember(userProfile.bio) { mutableStateOf(userProfile.bio) }
     var editAvatarId by remember(userProfile.avatarId) { mutableStateOf(userProfile.avatarId) }
-
-    val editSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var editCustomAvatarUri by remember(userProfile.customAvatarUri) { mutableStateOf(userProfile.customAvatarUri) }
 
     val bgColor = if (isDarkMode) Color(0xFF0D0F14) else Color(0xFFF9FAFB)
     val cardBg = if (isDarkMode) Color(0xFF1A1D24) else Color.White
@@ -95,6 +134,30 @@ fun ProfileScreen(
     val dividerColor = if (isDarkMode) Color(0xFF2D323F) else Color(0xFFF3F4F6)
     val primaryTextColor = if (isDarkMode) Color(0xFFF9FAFB) else Color(0xFF111827)
     val secondaryTextColor = if (isDarkMode) Color(0xFF9CA3AF) else Color(0xFF6B7280)
+
+    // Interactive Photo Cropper Dialog
+    if (showCropperDialog && rawSelectedImageUri != null) {
+        ProfilePhotoCropperDialog(
+            imageUri = rawSelectedImageUri!!,
+            onDismiss = {
+                showCropperDialog = false
+                rawSelectedImageUri = null
+            },
+            onCropSuccess = { croppedUri ->
+                showCropperDialog = false
+                rawSelectedImageUri = null
+                val uriStr = croppedUri.toString()
+                editCustomAvatarUri = uriStr
+                onUpdateProfile(
+                    userProfile.name,
+                    userProfile.handle,
+                    userProfile.bio,
+                    userProfile.avatarId,
+                    uriStr
+                )
+            }
+        )
+    }
 
     Box(
         modifier = modifier
@@ -114,16 +177,47 @@ fun ProfileScreen(
                         .padding(horizontal = 20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    UserAvatarView(
-                        modifier = Modifier.size(80.dp),
-                        avatarId = userProfile.avatarId,
-                        borderColor = borderColor
-                    )
+                    // Profile Photo with Camera Tap Overlay
+                    Box(
+                        contentAlignment = Alignment.BottomEnd,
+                        modifier = Modifier
+                            .size(90.dp)
+                            .clickable {
+                                photoPickerLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
+                            }
+                            .testTag("profile_avatar_tap")
+                    ) {
+                        UserAvatarView(
+                            modifier = Modifier.size(90.dp),
+                            avatarId = userProfile.avatarId,
+                            customAvatarUri = userProfile.customAvatarUri,
+                            borderColor = borderColor
+                        )
+
+                        // Camera badge for quick photo change and crop
+                        Box(
+                            modifier = Modifier
+                                .size(28.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF00A86B))
+                                .border(2.dp, bgColor, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CameraAlt,
+                                contentDescription = "Change profile photo",
+                                tint = Color.White,
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
+                    }
 
                     Spacer(modifier = Modifier.height(14.dp))
 
                     Text(
-                        text = userProfile.name,
+                        text = userProfile.name.ifBlank { "Novi Listener" },
                         color = primaryTextColor,
                         fontSize = 22.sp,
                         fontWeight = FontWeight.Bold,
@@ -133,7 +227,7 @@ fun ProfileScreen(
                     Spacer(modifier = Modifier.height(4.dp))
 
                     Text(
-                        text = userProfile.handle,
+                        text = userProfile.handle.ifBlank { "@novi_user" },
                         color = if (isDarkMode) Color(0xFF10B981) else Color(0xFF00A86B),
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium,
@@ -217,48 +311,97 @@ fun ProfileScreen(
 
             // Preferences Section
             item {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Audio & Settings",
-                        color = primaryTextColor,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                Text(
+                    text = "PREFERENCES",
+                    color = secondaryTextColor,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
+                )
 
-                    Text(
-                        text = "Configure",
-                        color = if (isDarkMode) Color(0xFF10B981) else Color(0xFF00A86B),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier
-                            .clickable { onOpenFullSettings() }
-                            .testTag("open_full_settings_button")
-                    )
-                }
+                Spacer(modifier = Modifier.height(6.dp))
 
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Equalizer Card (Acoustic, Jazz, Bass Boost, Custom interactive preview)
+                // Dedicated Audio & Settings Card with "Configure" button
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 20.dp)
+                        .clip(RoundedCornerShape(18.dp))
+                        .border(1.dp, borderColor, RoundedCornerShape(18.dp))
+                        .background(cardBg)
+                        .clickable { onOpenFullSettings() }
+                        .padding(16.dp)
+                        .testTag("audio_and_settings_card")
                 ) {
-                    EqualizerView(
-                        settings = audioSettings,
-                        onSettingsChange = onUpdateAudioSettings,
-                        isDarkMode = isDarkMode
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(14.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(46.dp)
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(Color(0xFF10B981).copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.GraphicEq,
+                                    contentDescription = "Audio & Settings",
+                                    tint = Color(0xFF10B981),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+
+                            Column {
+                                Text(
+                                    text = "Audio & Settings",
+                                    color = primaryTextColor,
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Equalizer, Crossfade, Gapless & Mono Audio",
+                                    color = secondaryTextColor,
+                                    fontSize = 12.sp,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(10.dp))
+
+                        // Explicit "Configure" Button
+                        Button(
+                            onClick = onOpenFullSettings,
+                            shape = RoundedCornerShape(20.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isDarkMode) Color(0xFF10B981) else Color(0xFF00A86B)
+                            ),
+                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                            modifier = Modifier.testTag("open_full_settings_button")
+                        ) {
+                            Text(
+                                text = "Configure",
+                                color = Color.White,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
+                // General Preferences Card (Language & Dark Theme)
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -267,105 +410,14 @@ fun ProfileScreen(
                         .border(1.dp, borderColor, RoundedCornerShape(16.dp))
                         .background(cardBg)
                 ) {
-                    // Audio Quality Option
-                    SettingToggleItem(
-                        icon = Icons.Default.Headphones,
-                        title = "Lossless Audio (${audioSettings.audioQuality.substringBefore(" (")})",
-                        subtitle = "Hi-Res studio sound with low jitter",
-                        checked = true,
-                        onCheckedChange = { onOpenFullSettings() },
-                        isDarkMode = isDarkMode,
-                        testTag = "lossless_audio_toggle"
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(1.dp)
-                            .background(dividerColor)
-                    )
-
-                    // Crossfade Switch
-                    SettingToggleItem(
-                        icon = Icons.Default.Sync,
-                        title = "Crossfade",
-                        subtitle = if (audioSettings.crossfadeEnabled) "${String.format("%.1f", audioSettings.crossfadeDurationSeconds)}s seamless track transition" else "Disabled",
-                        checked = audioSettings.crossfadeEnabled,
-                        onCheckedChange = { onUpdateAudioSettings(audioSettings.copy(crossfadeEnabled = it)) },
-                        isDarkMode = isDarkMode,
-                        testTag = "crossfade_toggle"
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(1.dp)
-                            .background(dividerColor)
-                    )
-
-                    // Gapless Playback
-                    SettingToggleItem(
-                        icon = Icons.Default.MusicNote,
-                        title = "Gapless Playback",
-                        subtitle = "Eliminates silence between live tracks",
-                        checked = audioSettings.gaplessPlayback,
-                        onCheckedChange = { onUpdateAudioSettings(audioSettings.copy(gaplessPlayback = it)) },
-                        isDarkMode = isDarkMode,
-                        testTag = "gapless_playback_toggle"
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(1.dp)
-                            .background(dividerColor)
-                    )
-
-                    // Mono Audio
-                    SettingToggleItem(
-                        icon = Icons.AutoMirrored.Filled.VolumeUp,
-                        title = "Mono Audio",
-                        subtitle = "Combines stereo channels for single earbud use",
-                        checked = audioSettings.monoAudio,
-                        onCheckedChange = { onUpdateAudioSettings(audioSettings.copy(monoAudio = it)) },
-                        isDarkMode = isDarkMode,
-                        testTag = "mono_audio_toggle"
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(1.dp)
-                            .background(dividerColor)
-                    )
-
-                    // Languages
-                    SettingToggleItem(
+                    // Language Selection Option
+                    SettingClickableItem(
                         icon = Icons.Default.Language,
                         title = "Language",
                         subtitle = audioSettings.language,
-                        checked = true,
-                        onCheckedChange = { onOpenFullSettings() },
+                        onClick = { showLanguageSheet = true },
                         isDarkMode = isDarkMode,
-                        testTag = "language_toggle"
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(1.dp)
-                            .background(dividerColor)
-                    )
-
-                    // Developer Mode
-                    SettingToggleItem(
-                        icon = Icons.Default.Code,
-                        title = "Developer Mode",
-                        subtitle = if (audioSettings.developerMode) "Telemetry & buffer logs enabled" else "Disabled",
-                        checked = audioSettings.developerMode,
-                        onCheckedChange = { onUpdateAudioSettings(audioSettings.copy(developerMode = it)) },
-                        isDarkMode = isDarkMode,
-                        testTag = "developer_mode_toggle"
+                        testTag = "profile_language_item"
                     )
 
                     Box(
@@ -385,6 +437,114 @@ fun ProfileScreen(
                         isDarkMode = isDarkMode,
                         testTag = "dark_mode_toggle"
                     )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Account & Authentication Section Card
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .border(1.dp, borderColor, RoundedCornerShape(16.dp))
+                        .background(cardBg)
+                ) {
+                    SettingClickableItem(
+                        icon = Icons.AutoMirrored.Filled.Logout,
+                        title = "Log Out / Switch Account",
+                        subtitle = "Sign out and return to the Welcome screen",
+                        onClick = onLogOut,
+                        isDarkMode = isDarkMode,
+                        testTag = "profile_logout_button"
+                    )
+                }
+            }
+        }
+
+        // Language Selection Modal Bottom Sheet
+        if (showLanguageSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { showLanguageSheet = false },
+                sheetState = languageSheetState,
+                containerColor = if (isDarkMode) Color(0xFF161922) else Color.White,
+                contentColor = primaryTextColor
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
+                        .padding(bottom = 36.dp)
+                ) {
+                    Text(
+                        text = "Select Language",
+                        color = primaryTextColor,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    Text(
+                        text = "Choose your preferred interface and lyrics language",
+                        color = secondaryTextColor,
+                        fontSize = 13.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        supportedLanguages.forEach { (langKey, langDesc) ->
+                            val isSelected = audioSettings.language.startsWith(langKey) || audioSettings.language == langKey
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(14.dp))
+                                    .background(
+                                        if (isSelected) {
+                                            if (isDarkMode) Color(0xFF10B981).copy(alpha = 0.2f)
+                                            else Color(0xFF00A86B).copy(alpha = 0.12f)
+                                        } else Color.Transparent
+                                    )
+                                    .clickable {
+                                        onUpdateAudioSettings(audioSettings.copy(language = langKey))
+                                        showLanguageSheet = false
+                                    }
+                                    .padding(horizontal = 16.dp, vertical = 13.dp)
+                                    .testTag("language_option_${langKey.replace(" ", "_")}"),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = langKey,
+                                        color = if (isSelected) {
+                                            if (isDarkMode) Color(0xFF10B981) else Color(0xFF00A86B)
+                                        } else primaryTextColor,
+                                        fontSize = 15.sp,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                    )
+                                    Text(
+                                        text = langDesc,
+                                        color = secondaryTextColor,
+                                        fontSize = 12.sp
+                                    )
+                                }
+
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = "Selected",
+                                        tint = if (isDarkMode) Color(0xFF10B981) else Color(0xFF00A86B),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -420,12 +580,124 @@ fun ProfileScreen(
 
                     Spacer(modifier = Modifier.height(20.dp))
 
-                    // PFP Avatar Picker
+                    // Custom Photo Section & PFP Avatar Picker
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Profile Picture",
+                            color = primaryTextColor,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+
+                        // Upload & Crop Button
+                        OutlinedButton(
+                            onClick = {
+                                photoPickerLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
+                            },
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, Color(0xFF10B981)),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                contentColor = Color(0xFF10B981)
+                            ),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                            modifier = Modifier.testTag("upload_custom_avatar_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AddPhotoAlternate,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Upload & Crop", fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+
+                    if (!editCustomAvatarUri.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(cardBg)
+                                .border(1.dp, borderColor, RoundedCornerShape(12.dp))
+                                .padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                UserAvatarView(
+                                    modifier = Modifier.size(48.dp),
+                                    customAvatarUri = editCustomAvatarUri,
+                                    borderColor = Color(0xFF10B981)
+                                )
+                                Column {
+                                    Text(
+                                        text = "Custom Cropped Photo Active",
+                                        color = primaryTextColor,
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = "Tap Crop to change or Remove to use avatar",
+                                        color = secondaryTextColor,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                            }
+
+                            Row {
+                                OutlinedButton(
+                                    onClick = {
+                                        photoPickerLauncher.launch(
+                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                        )
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = BorderStroke(1.dp, Color(0xFF10B981)),
+                                    modifier = Modifier.height(32.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Crop,
+                                        contentDescription = "Crop",
+                                        tint = Color(0xFF10B981),
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(6.dp))
+                                OutlinedButton(
+                                    onClick = { editCustomAvatarUri = null },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    border = BorderStroke(1.dp, Color(0xFFEF4444)),
+                                    modifier = Modifier.height(32.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Remove photo",
+                                        tint = Color(0xFFEF4444),
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
                     Text(
-                        text = "Select Avatar (PFP)",
-                        color = primaryTextColor,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold
+                        text = "Or choose preset avatar style:",
+                        color = secondaryTextColor,
+                        fontSize = 13.sp
                     )
 
                     Spacer(modifier = Modifier.height(10.dp))
@@ -441,12 +713,15 @@ fun ProfileScreen(
                             3 to "Synth",
                             4 to "Audiophile"
                         ).forEach { (id, label) ->
-                            val isSelected = editAvatarId == id
+                            val isSelected = editAvatarId == id && editCustomAvatarUri.isNullOrBlank()
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(12.dp))
-                                    .clickable { editAvatarId = id }
+                                    .clickable {
+                                        editAvatarId = id
+                                        editCustomAvatarUri = null
+                                    }
                                     .padding(6.dp)
                             ) {
                                 Box(
@@ -563,7 +838,7 @@ fun ProfileScreen(
                     // Save Button
                     Button(
                         onClick = {
-                            onUpdateProfile(editName, editHandle, editBio, editAvatarId)
+                            onUpdateProfile(editName, editHandle, editBio, editAvatarId, editCustomAvatarUri)
                             showEditProfileSheet = false
                         },
                         modifier = Modifier
@@ -662,6 +937,59 @@ fun SettingToggleItem(
                 uncheckedThumbColor = if (isDarkMode) Color(0xFF9CA3AF) else Color(0xFFD1D5DB),
                 uncheckedTrackColor = if (isDarkMode) Color(0xFF2D323F) else Color(0xFFE5E7EB)
             )
+        )
+    }
+}
+
+@Composable
+fun SettingClickableItem(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit,
+    isDarkMode: Boolean,
+    testTag: String = ""
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 14.dp)
+            .then(if (testTag.isNotEmpty()) Modifier.testTag(testTag) else Modifier),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            modifier = Modifier.weight(1f)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = Color(0xFF00A86B),
+                modifier = Modifier.size(22.dp)
+            )
+            Column {
+                Text(
+                    text = title,
+                    color = if (isDarkMode) Color(0xFFF9FAFB) else Color(0xFF111827),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = subtitle,
+                    color = if (isDarkMode) Color(0xFF9CA3AF) else Color(0xFF6B7280),
+                    fontSize = 12.sp
+                )
+            }
+        }
+
+        Icon(
+            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            contentDescription = null,
+            tint = if (isDarkMode) Color(0xFF9CA3AF) else Color(0xFF6B7280),
+            modifier = Modifier.size(20.dp)
         )
     }
 }

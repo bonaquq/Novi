@@ -4,13 +4,29 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Emerald Green Rounded Square Tile -->
-    <path
-        android:pathData="M38,30h32c6.6,0 12,5.4 12,12v24c0,6.6 -5.4,12 -12,12h-32c-6.6,0 -12,-5.4 -12,-12v-24c0,-6.6 5.4,-12 12,-12z"
-        android:fillColor="#00A86B" />
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="0.65"
+        android:scaleY="0.65">
+        <!-- Top Horizontal Bar -->
+        <path
+            android:pathData="M24,28h60v7h-60z"
+            android:fillColor="#FFFFFF" />
 
-    <!-- Pure White Music Notes Symbol -->
-    <path
-        android:pathData="M48,64a4,4 0 1,1 -4,-4c0.7,0 1.4,0.2 2,0.5V44l16,-4v18a4,4 0 1,1 -4,-4c0.7,0 1.4,0.2 2,0.5V45.5l-12,3V60.5c-0.6,-0.3 -1.3,-0.5 -2,-0.5z"
-        android:fillColor="#FFFFFF" />
+        <!-- Middle Play Triangle -->
+        <path
+            android:pathData="M27,41.5v25l22.5,-12.5z"
+            android:fillColor="#FFFFFF" />
+
+        <!-- Middle Right Horizontal Bar -->
+        <path
+            android:pathData="M54,50.5h30v7h-30z"
+            android:fillColor="#FFFFFF" />
+
+        <!-- Bottom Horizontal Bar -->
+        <path
+            android:pathData="M24,73h60v7h-60z"
+            android:fillColor="#FFFFFF" />
+    </group>
 </vector>

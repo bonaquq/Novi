@@ -27,14 +27,20 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.model.ArtworkType
 
 /**
  * High-fidelity vector illustrations matching the aesthetic from the reference screenshots.
+ * Supports custom picked images or custom artwork URIs.
  */
 @Composable
 fun TrackArtworkDisplay(
     artworkType: ArtworkType,
+    customImageUri: String? = null,
     modifier: Modifier = Modifier
 ) {
     Box(
@@ -43,14 +49,26 @@ fun TrackArtworkDisplay(
             .background(Color.White),
         contentAlignment = Alignment.Center
     ) {
-        when (artworkType) {
-            ArtworkType.SONIC_YOUTH -> SonicYouthArtwork(Modifier.fillMaxSize())
-            ArtworkType.DEPECHE_MODE -> DepecheModeArtwork(Modifier.fillMaxSize())
-            ArtworkType.WOODZ -> WoodzArtwork(Modifier.fillMaxSize())
-            ArtworkType.APHEX_TWIN -> AphexTwinArtwork(Modifier.fillMaxSize())
-            ArtworkType.NELLY_MES -> NellyMesArtwork(Modifier.fillMaxSize())
-            ArtworkType.BOARDS_OF_CANADA -> BoardsOfCanadaArtwork(Modifier.fillMaxSize())
-            ArtworkType.GORILLAZ -> GorillazArtwork(Modifier.fillMaxSize())
+        if (!customImageUri.isNullOrBlank()) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(customImageUri)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = "Playlist Cover",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            when (artworkType) {
+                ArtworkType.SONIC_YOUTH -> SonicYouthArtwork(Modifier.fillMaxSize())
+                ArtworkType.DEPECHE_MODE -> DepecheModeArtwork(Modifier.fillMaxSize())
+                ArtworkType.WOODZ -> WoodzArtwork(Modifier.fillMaxSize())
+                ArtworkType.APHEX_TWIN -> AphexTwinArtwork(Modifier.fillMaxSize())
+                ArtworkType.NELLY_MES -> NellyMesArtwork(Modifier.fillMaxSize())
+                ArtworkType.BOARDS_OF_CANADA -> BoardsOfCanadaArtwork(Modifier.fillMaxSize())
+                ArtworkType.GORILLAZ -> GorillazArtwork(Modifier.fillMaxSize())
+            }
         }
     }
 }
@@ -566,14 +584,33 @@ fun GorillazArtwork(modifier: Modifier = Modifier) {
 }
 
 /**
- * User Profile Avatar with selectable styles for Edit Profile.
+ * User Profile Avatar with selectable styles for Edit Profile or custom cropped photo.
  */
 @Composable
 fun UserAvatarView(
     modifier: Modifier = Modifier,
     avatarId: Int = 1,
+    customAvatarUri: String? = null,
     borderColor: Color = Color(0xFFE5E7EB)
 ) {
+    if (!customAvatarUri.isNullOrBlank()) {
+        Box(
+            modifier = modifier
+                .clip(CircleShape)
+                .background(Color(0xFF1E222D))
+                .border(1.5.dp, borderColor, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            AsyncImage(
+                model = customAvatarUri,
+                contentDescription = "Profile Picture",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+        return
+    }
+
     val bgColors = when (avatarId) {
         2 -> Color(0xFFC084FC) // Violet/Cyberpunk
         3 -> Color(0xFFFB923C) // Sunset Coral
