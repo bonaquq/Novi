@@ -1,0 +1,7 @@
+{
+  "name": "Novi",
+  "description": "Novi - A sleek modern music player featuring playlist curation, genre filtering, synchronized karaoke lyrics, and customizable themes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
