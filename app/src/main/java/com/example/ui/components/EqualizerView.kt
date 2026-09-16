@@ -63,6 +63,17 @@ fun EqualizerView(
     isDarkMode: Boolean,
     modifier: Modifier = Modifier
 ) {
+    // ONLY show detailed studio curve equalizer if developer mode is enabled
+    if (settings.developerMode) {
+        DetailedEqualizerView(
+            settings = settings,
+            onSettingsChange = onSettingsChange,
+            isDarkMode = isDarkMode,
+            modifier = modifier
+        )
+        return
+    }
+
     val cardBg = if (isDarkMode) Color(0xFF161922) else Color.White
     val borderColor = if (isDarkMode) Color(0xFF2D323F) else Color(0xFFE5E7EB)
     val textPrimary = if (isDarkMode) Color.White else Color(0xFF111827)

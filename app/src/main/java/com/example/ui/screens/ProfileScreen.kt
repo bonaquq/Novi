@@ -22,12 +22,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
@@ -36,17 +38,23 @@ import androidx.compose.material.icons.filled.Crop
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -72,9 +80,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.AudioAppSettings
+import com.example.model.Track
+import com.example.model.UserPlaylist
 import com.example.model.UserProfile
+import com.example.ui.components.DevPasscodeDialog
 import com.example.ui.components.EqualizerView
 import com.example.ui.components.ProfilePhotoCropperDialog
+import com.example.ui.components.TrackArtworkDisplay
 import com.example.ui.components.UserAvatarView
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -88,12 +100,25 @@ fun ProfileScreen(
     onUpdateAudioSettings: (AudioAppSettings) -> Unit = {},
     onOpenFullSettings: () -> Unit = {},
     onLogOut: () -> Unit = {},
+    likedPlaylists: List<UserPlaylist> = emptyList(),
+    userPlaylists: List<UserPlaylist> = emptyList(),
+    followedArtists: Set<String> = emptySet(),
+    allTracks: List<Track> = emptyList(),
+    onPlaylistSelected: (UserPlaylist) -> Unit = {},
+    onCreatePlaylist: (String, String) -> Unit = { _, _ -> },
+    onToggleLikePlaylist: (String) -> Unit = {},
+    onToggleFollowArtist: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showEditProfileSheet by remember { mutableStateOf(false) }
     var showLanguageSheet by remember { mutableStateOf(false) }
+    var activeStatSheet by remember { mutableStateOf<String?>(null) }
     val editSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val languageSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val statSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showCreatePlaylistInProfile by remember { mutableStateOf(false) }
+    var newProfilePlaylistName by remember { mutableStateOf("") }
+    var newProfilePlaylistDesc by remember { mutableStateOf("") }
 
     // Image Picker and Cropper State
     var rawSelectedImageUri by remember { mutableStateOf<Uri?>(null) }
@@ -127,13 +152,15 @@ fun ProfileScreen(
     var editBio by remember(userProfile.bio) { mutableStateOf(userProfile.bio) }
     var editAvatarId by remember(userProfile.avatarId) { mutableStateOf(userProfile.avatarId) }
     var editCustomAvatarUri by remember(userProfile.customAvatarUri) { mutableStateOf(userProfile.customAvatarUri) }
+    var showDevPasscodeDialog by remember { mutableStateOf(false) }
 
-    val bgColor = if (isDarkMode) Color(0xFF0D0F14) else Color(0xFFF9FAFB)
-    val cardBg = if (isDarkMode) Color(0xFF1A1D24) else Color.White
-    val borderColor = if (isDarkMode) Color(0xFF2D323F) else Color(0xFFE5E7EB)
-    val dividerColor = if (isDarkMode) Color(0xFF2D323F) else Color(0xFFF3F4F6)
-    val primaryTextColor = if (isDarkMode) Color(0xFFF9FAFB) else Color(0xFF111827)
-    val secondaryTextColor = if (isDarkMode) Color(0xFF9CA3AF) else Color(0xFF6B7280)
+    val isDevMode = audioSettings.developerMode
+    val bgColor = if (isDevMode) Color.Transparent else if (isDarkMode) Color(0xFF0D0F14) else Color(0xFFF9FAFB)
+    val cardBg = if (isDevMode) Color(0xCC161922) else if (isDarkMode) Color(0xFF1A1D24) else Color.White
+    val borderColor = if (isDevMode) Color(0x33FFFFFF) else if (isDarkMode) Color(0xFF2D323F) else Color(0xFFE5E7EB)
+    val dividerColor = if (isDevMode) Color(0x22FFFFFF) else if (isDarkMode) Color(0xFF2D323F) else Color(0xFFF3F4F6)
+    val primaryTextColor = if (isDarkMode || isDevMode) Color(0xFFF9FAFB) else Color(0xFF111827)
+    val secondaryTextColor = if (isDarkMode || isDevMode) Color(0xFF9CA3AF) else Color(0xFF6B7280)
 
     // Interactive Photo Cropper Dialog
     if (showCropperDialog && rawSelectedImageUri != null) {
@@ -280,7 +307,8 @@ fun ProfileScreen(
 
                     Spacer(modifier = Modifier.height(20.dp))
 
-                    // Stats Row
+                    // Stats Row (Favorites: liked playlists, Playlists: created playlists, Artists: followed artists)
+                    val createdPlaylistsCount = userPlaylists.count { it.isCreatedByUser }
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -290,19 +318,34 @@ fun ProfileScreen(
                             .padding(vertical = 16.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
-                        StatItem(count = "24", label = "Favorites", isDarkMode = isDarkMode)
+                        StatItem(
+                            count = likedPlaylists.size.toString(),
+                            label = "Favorites",
+                            isDarkMode = isDarkMode,
+                            onClick = { activeStatSheet = "Favorites" }
+                        )
                         Box(
                             modifier = Modifier
                                 .size(width = 1.dp, height = 36.dp)
                                 .background(borderColor)
                         )
-                        StatItem(count = "8", label = "Playlists", isDarkMode = isDarkMode)
+                        StatItem(
+                            count = createdPlaylistsCount.toString(),
+                            label = "Playlists",
+                            isDarkMode = isDarkMode,
+                            onClick = { activeStatSheet = "Playlists" }
+                        )
                         Box(
                             modifier = Modifier
                                 .size(width = 1.dp, height = 36.dp)
                                 .background(borderColor)
                         )
-                        StatItem(count = "19", label = "Artists", isDarkMode = isDarkMode)
+                        StatItem(
+                            count = followedArtists.size.toString(),
+                            label = "Artists",
+                            isDarkMode = isDarkMode,
+                            onClick = { activeStatSheet = "Artists" }
+                        )
                     }
                 }
 
@@ -437,6 +480,30 @@ fun ProfileScreen(
                         isDarkMode = isDarkMode,
                         testTag = "dark_mode_toggle"
                     )
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(dividerColor)
+                    )
+
+                    // Developer Mode Option
+                    SettingToggleItem(
+                        icon = Icons.Default.Tune,
+                        title = "Developer Mode",
+                        subtitle = if (audioSettings.developerMode) "Enabled • Monochromatic Silk Wallpaper & Studio Equalizer" else "Disabled • Unlock theme wallpaper & studio curve equalizer",
+                        checked = audioSettings.developerMode,
+                        onCheckedChange = { isChecked ->
+                            if (isChecked) {
+                                showDevPasscodeDialog = true
+                            } else {
+                                onUpdateAudioSettings(audioSettings.copy(developerMode = false))
+                            }
+                        },
+                        isDarkMode = isDarkMode || isDevMode,
+                        testTag = "profile_developer_mode_toggle"
+                    )
                 }
 
                 Spacer(modifier = Modifier.height(14.dp))
@@ -460,6 +527,18 @@ fun ProfileScreen(
                     )
                 }
             }
+        }
+
+        // Developer Passcode Dialog
+        if (showDevPasscodeDialog) {
+            DevPasscodeDialog(
+                onDismiss = { showDevPasscodeDialog = false },
+                onSuccess = {
+                    showDevPasscodeDialog = false
+                    onUpdateAudioSettings(audioSettings.copy(developerMode = true))
+                },
+                isDarkMode = isDarkMode || isDevMode
+            )
         }
 
         // Language Selection Modal Bottom Sheet
@@ -860,6 +939,510 @@ fun ProfileScreen(
                 }
             }
         }
+
+        // Interactive Bottom Sheet for Profile Stats (Favorites, Playlists, Artists)
+        activeStatSheet?.let { statType ->
+            ModalBottomSheet(
+                onDismissRequest = { activeStatSheet = null },
+                sheetState = statSheetState,
+                containerColor = if (isDarkMode) Color(0xFF161922) else Color.White,
+                contentColor = primaryTextColor
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp)
+                        .padding(bottom = 36.dp)
+                ) {
+                    when (statType) {
+                        "Favorites" -> {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = "Liked Playlists",
+                                        fontSize = 22.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = primaryTextColor
+                                    )
+                                    Text(
+                                        text = "${likedPlaylists.size} favorite playlists",
+                                        fontSize = 13.sp,
+                                        color = secondaryTextColor
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            if (likedPlaylists.isEmpty()) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 32.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.FavoriteBorder,
+                                            contentDescription = null,
+                                            tint = secondaryTextColor,
+                                            modifier = Modifier.size(36.dp)
+                                        )
+                                        Text(
+                                            text = "No liked playlists yet",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 16.sp,
+                                            color = primaryTextColor
+                                        )
+                                        Text(
+                                            text = "Tap the heart icon on any playlist to save it to your Favorites.",
+                                            fontSize = 13.sp,
+                                            color = secondaryTextColor,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                }
+                            } else {
+                                LazyColumn(
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    items(likedPlaylists) { playlist ->
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(cardBg)
+                                                .border(1.dp, borderColor, RoundedCornerShape(12.dp))
+                                                .clickable {
+                                                    onPlaylistSelected(playlist)
+                                                    activeStatSheet = null
+                                                }
+                                                .padding(12.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(48.dp)
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                ) {
+                                                    TrackArtworkDisplay(
+                                                        artworkType = playlist.artworkType,
+                                                        customImageUri = playlist.customImageUri,
+                                                        modifier = Modifier.fillMaxSize()
+                                                    )
+                                                }
+                                                Column {
+                                                    Text(
+                                                        text = playlist.name,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        fontSize = 15.sp,
+                                                        color = primaryTextColor,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                    Text(
+                                                        text = "${playlist.trackIds.size} tracks",
+                                                        fontSize = 12.sp,
+                                                        color = secondaryTextColor
+                                                    )
+                                                }
+                                            }
+                                            IconButton(
+                                                onClick = { onToggleLikePlaylist(playlist.id) },
+                                                modifier = Modifier.size(36.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Favorite,
+                                                    contentDescription = "Unlike",
+                                                    tint = Color(0xFFEF4444)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        "Playlists" -> {
+                            val created = userPlaylists.filter { it.isCreatedByUser }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text(
+                                        text = "Your Playlists",
+                                        fontSize = 22.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = primaryTextColor
+                                    )
+                                    Text(
+                                        text = "${created.size} created by you",
+                                        fontSize = 13.sp,
+                                        color = secondaryTextColor
+                                    )
+                                }
+
+                                Button(
+                                    onClick = { showCreatePlaylistInProfile = true },
+                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                                    shape = RoundedCornerShape(20.dp),
+                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("New", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(16.dp))
+
+                            if (created.isEmpty()) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 32.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.PlaylistPlay,
+                                            contentDescription = null,
+                                            tint = secondaryTextColor,
+                                            modifier = Modifier.size(36.dp)
+                                        )
+                                        Text(
+                                            text = "No playlists created yet",
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 16.sp,
+                                            color = primaryTextColor
+                                        )
+                                        Text(
+                                            text = "Tap '+ New' to create your first custom playlist.",
+                                            fontSize = 13.sp,
+                                            color = secondaryTextColor,
+                                            textAlign = TextAlign.Center
+                                        )
+                                    }
+                                }
+                            } else {
+                                LazyColumn(
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    items(created) { playlist ->
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(cardBg)
+                                                .border(1.dp, borderColor, RoundedCornerShape(12.dp))
+                                                .clickable {
+                                                    onPlaylistSelected(playlist)
+                                                    activeStatSheet = null
+                                                }
+                                                .padding(12.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                                modifier = Modifier.weight(1f)
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(48.dp)
+                                                        .clip(RoundedCornerShape(8.dp))
+                                                ) {
+                                                    TrackArtworkDisplay(
+                                                        artworkType = playlist.artworkType,
+                                                        customImageUri = playlist.customImageUri,
+                                                        modifier = Modifier.fillMaxSize()
+                                                    )
+                                                }
+                                                Column {
+                                                    Text(
+                                                        text = playlist.name,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        fontSize = 15.sp,
+                                                        color = primaryTextColor,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                    Text(
+                                                        text = "${playlist.trackIds.size} tracks • Created by you",
+                                                        fontSize = 12.sp,
+                                                        color = secondaryTextColor
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        "Artists" -> {
+                            val suggestedArtists = remember(allTracks, followedArtists) {
+                                allTracks.map { it.artist }.distinct().filter { it !in followedArtists }
+                            }
+
+                            Column {
+                                Text(
+                                    text = "Artists",
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = primaryTextColor
+                                )
+                                Text(
+                                    text = "${followedArtists.size} followed • Discover more below",
+                                    fontSize = 13.sp,
+                                    color = secondaryTextColor
+                                )
+
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                LazyColumn(
+                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    if (followedArtists.isNotEmpty()) {
+                                        item {
+                                            Text(
+                                                text = "FOLLOWING (${followedArtists.size})",
+                                                color = secondaryTextColor,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                letterSpacing = 1.sp,
+                                                modifier = Modifier.padding(vertical = 4.dp)
+                                            )
+                                        }
+
+                                        items(followedArtists.toList()) { artist ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clip(RoundedCornerShape(12.dp))
+                                                    .background(cardBg)
+                                                    .border(1.dp, borderColor, RoundedCornerShape(12.dp))
+                                                    .padding(12.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                                ) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(40.dp)
+                                                            .clip(CircleShape)
+                                                            .background(if (isDarkMode) Color(0xFF232836) else Color(0xFFE5E7EB)),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.Person,
+                                                            contentDescription = null,
+                                                            tint = primaryTextColor,
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                    }
+                                                    Text(
+                                                        text = artist,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        fontSize = 15.sp,
+                                                        color = primaryTextColor
+                                                    )
+                                                }
+
+                                                OutlinedButton(
+                                                    onClick = { onToggleFollowArtist(artist) },
+                                                    shape = RoundedCornerShape(16.dp),
+                                                    border = BorderStroke(1.dp, Color(0xFF10B981)),
+                                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                                ) {
+                                                    Text("Following ✓", color = Color(0xFF10B981), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        item {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(vertical = 16.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Text(
+                                                    text = "You are not following any artists yet.",
+                                                    fontSize = 13.sp,
+                                                    color = secondaryTextColor
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    if (suggestedArtists.isNotEmpty()) {
+                                        item {
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            Text(
+                                                text = "SUGGESTED ARTISTS",
+                                                color = secondaryTextColor,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                letterSpacing = 1.sp,
+                                                modifier = Modifier.padding(vertical = 4.dp)
+                                            )
+                                        }
+
+                                        items(suggestedArtists) { artist ->
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clip(RoundedCornerShape(12.dp))
+                                                    .background(cardBg)
+                                                    .border(1.dp, borderColor, RoundedCornerShape(12.dp))
+                                                    .padding(12.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                                ) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(40.dp)
+                                                            .clip(CircleShape)
+                                                            .background(if (isDarkMode) Color(0xFF232836) else Color(0xFFE5E7EB)),
+                                                        contentAlignment = Alignment.Center
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.MusicNote,
+                                                            contentDescription = null,
+                                                            tint = secondaryTextColor,
+                                                            modifier = Modifier.size(20.dp)
+                                                        )
+                                                    }
+                                                    Text(
+                                                        text = artist,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        fontSize = 15.sp,
+                                                        color = primaryTextColor
+                                                    )
+                                                }
+
+                                                Button(
+                                                    onClick = { onToggleFollowArtist(artist) },
+                                                    shape = RoundedCornerShape(16.dp),
+                                                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.PersonAdd,
+                                                        contentDescription = null,
+                                                        tint = Color.White,
+                                                        modifier = Modifier.size(14.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(4.dp))
+                                                    Text("Follow", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Dialog for creating playlist directly from Profile
+        if (showCreatePlaylistInProfile) {
+            androidx.compose.material3.AlertDialog(
+                onDismissRequest = { showCreatePlaylistInProfile = false },
+                containerColor = if (isDarkMode) Color(0xFF161922) else Color.White,
+                title = { Text("New Playlist", fontWeight = FontWeight.Bold, color = primaryTextColor) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedTextField(
+                            value = newProfilePlaylistName,
+                            onValueChange = { newProfilePlaylistName = it },
+                            label = { Text("Playlist Name") },
+                            placeholder = { Text("e.g. Chill Beats") },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color(0xFF10B981),
+                                unfocusedBorderColor = borderColor,
+                                focusedTextColor = primaryTextColor,
+                                unfocusedTextColor = primaryTextColor
+                            ),
+                            modifier = Modifier.fillMaxWidth().testTag("profile_new_playlist_name")
+                        )
+                        OutlinedTextField(
+                            value = newProfilePlaylistDesc,
+                            onValueChange = { newProfilePlaylistDesc = it },
+                            label = { Text("Description (optional)") },
+                            placeholder = { Text("e.g. My study playlist") },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = Color(0xFF10B981),
+                                unfocusedBorderColor = borderColor,
+                                focusedTextColor = primaryTextColor,
+                                unfocusedTextColor = primaryTextColor
+                            ),
+                            modifier = Modifier.fillMaxWidth().testTag("profile_new_playlist_desc")
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            if (newProfilePlaylistName.isNotBlank()) {
+                                onCreatePlaylist(newProfilePlaylistName.trim(), newProfilePlaylistDesc.trim())
+                                newProfilePlaylistName = ""
+                                newProfilePlaylistDesc = ""
+                                showCreatePlaylistInProfile = false
+                            }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                        enabled = newProfilePlaylistName.isNotBlank()
+                    ) {
+                        Text("Create", color = Color.White)
+                    }
+                },
+                dismissButton = {
+                    androidx.compose.material3.TextButton(onClick = { showCreatePlaylistInProfile = false }) {
+                        Text("Cancel", color = secondaryTextColor)
+                    }
+                }
+            )
+        }
     }
 }
 
@@ -867,9 +1450,17 @@ fun ProfileScreen(
 fun StatItem(
     count: String,
     label: String,
-    isDarkMode: Boolean
+    isDarkMode: Boolean,
+    onClick: (() -> Unit)? = null,
+    modifier: Modifier = Modifier
 ) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
+            .padding(horizontal = 8.dp)
+            .testTag("profile_stat_${label.lowercase()}")
+    ) {
         Text(
             text = count,
             color = if (isDarkMode) Color.White else Color(0xFF111827),

@@ -2,6 +2,7 @@ package com.example.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -61,7 +62,7 @@ fun DevPasscodeDialog(
     var isPasswordVisible by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    val validCodes = setOf("7777", "NOVI777", "1337", "NOVIDEV", "DEV2026")
+    val validCodes = setOf("0902", "NOVI0902", "NOVI777", "1337", "NOVIDEV", "DEV2026")
 
     fun attemptUnlock() {
         val trimmed = codeInput.trim()
@@ -69,7 +70,7 @@ fun DevPasscodeDialog(
             errorMessage = null
             onSuccess()
         } else {
-            errorMessage = "Invalid developer access code. Try '7777'"
+            errorMessage = "Invalid developer access code. Please try again."
         }
     }
 
@@ -141,7 +142,7 @@ fun DevPasscodeDialog(
                         if (errorMessage != null) errorMessage = null
                     },
                     label = { Text("Developer Passcode") },
-                    placeholder = { Text("Enter code (e.g. 7777)") },
+                    placeholder = { Text("Enter passcode") },
                     singleLine = true,
                     isError = errorMessage != null,
                     visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
@@ -191,37 +192,6 @@ fun DevPasscodeDialog(
                         fontWeight = FontWeight.Medium,
                         textAlign = TextAlign.Center
                     )
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Hint box
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(
-                            if (isDarkMode) Color(0xFF0D0F14) else Color(0xFFF3F4F6)
-                        )
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Lock,
-                            contentDescription = null,
-                            tint = Color(0xFF10B981),
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = "Default access code: 7777",
-                            color = textSecondary,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
                 }
 
                 Spacer(modifier = Modifier.height(24.dp))

@@ -45,6 +45,18 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
     )
     val currentTrack: StateFlow<Track> = _currentTrack.asStateFlow()
 
+    // Recently listened tracks list (starts empty with all previous tracks removed)
+    private val _recentlyListenedTracks = MutableStateFlow<List<Track>>(emptyList())
+    val recentlyListenedTracks: StateFlow<List<Track>> = _recentlyListenedTracks.asStateFlow()
+
+    fun clearRecentlyListened() {
+        _recentlyListenedTracks.value = emptyList()
+    }
+
+    fun removeTrackFromRecentlyListened(trackId: String) {
+        _recentlyListenedTracks.value = _recentlyListenedTracks.value.filter { it.id != trackId }
+    }
+
     init {
         viewModelScope.launch {
             userAccountRepo.initializeDefaultAccountsIfNeeded()
@@ -152,6 +164,41 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
     private val _selectedPlaylist = MutableStateFlow<UserPlaylist?>(null)
     val selectedPlaylist: StateFlow<UserPlaylist?> = _selectedPlaylist.asStateFlow()
 
+    // Liked Playlists tracking (Favorites in Profile tab)
+    private val _likedPlaylistIds = MutableStateFlow<Set<String>>(emptySet())
+    val likedPlaylistIds: StateFlow<Set<String>> = _likedPlaylistIds.asStateFlow()
+
+    // Followed Artists tracking (Artists in Profile tab)
+    private val _followedArtists = MutableStateFlow<Set<String>>(emptySet())
+    val followedArtists: StateFlow<Set<String>> = _followedArtists.asStateFlow()
+
+    fun toggleLikePlaylist(playlistId: String) {
+        val current = _likedPlaylistIds.value
+        val isNowLiked = playlistId !in current
+        _likedPlaylistIds.value = if (isNowLiked) current + playlistId else current - playlistId
+        _userPlaylists.value = _userPlaylists.value.map {
+            if (it.id == playlistId) it.copy(isLiked = isNowLiked) else it
+        }
+        if (_selectedPlaylist.value?.id == playlistId) {
+            _selectedPlaylist.value = _selectedPlaylist.value?.copy(isLiked = isNowLiked)
+        }
+    }
+
+    fun isPlaylistLiked(playlistId: String): Boolean {
+        return playlistId in _likedPlaylistIds.value
+    }
+
+    fun toggleFollowArtist(artist: String) {
+        val trimmed = artist.trim()
+        if (trimmed.isBlank()) return
+        val current = _followedArtists.value
+        _followedArtists.value = if (trimmed in current) current - trimmed else current + trimmed
+    }
+
+    fun isArtistFollowed(artist: String): Boolean {
+        return artist.trim() in _followedArtists.value
+    }
+
     private var progressJob: Job? = null
 
     init {
@@ -163,6 +210,7 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
         _currentPositionSeconds.value = 0
         _isPlaying.value = true
         _isNowPlayingVisible.value = true
+        _recentlyListenedTracks.value = listOf(track) + _recentlyListenedTracks.value.filter { it.id != track.id }
         audioEngine.play(track.baseFrequency, track.tempoBpm)
         startProgressTracking()
     }

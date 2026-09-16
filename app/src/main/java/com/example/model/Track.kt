@@ -70,7 +70,9 @@ data class UserPlaylist(
     val coverGradientEnd: Long = 0xFF047857,
     val artworkType: ArtworkType = ArtworkType.APHEX_TWIN,
     val customImageUri: String? = null,
-    val trackIds: List<String> = emptyList()
+    val trackIds: List<String> = emptyList(),
+    val isLiked: Boolean = false,
+    val isCreatedByUser: Boolean = true
 )
 
 data class EssentialCard(

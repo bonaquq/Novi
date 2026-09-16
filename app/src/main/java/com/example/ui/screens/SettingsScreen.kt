@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.RadioButtonChecked
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Sync
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -62,6 +63,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.model.AudioAppSettings
+import com.example.ui.components.DevPasscodeDialog
 import com.example.ui.components.EqualizerView
 
 @Composable
@@ -74,33 +76,22 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     var showQualityDialog by remember { mutableStateOf(false) }
-    var showLanguageDialog by remember { mutableStateOf(false) }
+    var showDevPasscodeDialog by remember { mutableStateOf(false) }
 
-    val bgColor = if (isDarkMode) Color(0xFF0D0F14) else Color(0xFFF9FAFB)
-    val cardBg = if (isDarkMode) Color(0xFF1A1D24) else Color.White
-    val borderColor = if (isDarkMode) Color(0xFF2D323F) else Color(0xFFE5E7EB)
-    val dividerColor = if (isDarkMode) Color(0xFF2D323F) else Color(0xFFF3F4F6)
-    val primaryTextColor = if (isDarkMode) Color.White else Color(0xFF111827)
-    val secondaryTextColor = if (isDarkMode) Color(0xFF9CA3AF) else Color(0xFF6B7280)
-    val accentEmerald = if (isDarkMode) Color(0xFF10B981) else Color(0xFF00A86B)
+    val isDevMode = settings.developerMode
+    val bgColor = if (isDevMode) Color.Transparent else if (isDarkMode) Color(0xFF0D0F14) else Color(0xFFF9FAFB)
+    val cardBg = if (isDevMode) Color(0xCC161922) else if (isDarkMode) Color(0xFF1A1D24) else Color.White
+    val borderColor = if (isDevMode) Color(0x33FFFFFF) else if (isDarkMode) Color(0xFF2D323F) else Color(0xFFE5E7EB)
+    val dividerColor = if (isDevMode) Color(0x22FFFFFF) else if (isDarkMode) Color(0xFF2D323F) else Color(0xFFF3F4F6)
+    val primaryTextColor = if (isDarkMode || isDevMode) Color.White else Color(0xFF111827)
+    val secondaryTextColor = if (isDarkMode || isDevMode) Color(0xFF9CA3AF) else Color(0xFF6B7280)
+    val accentEmerald = if (isDarkMode || isDevMode) Color(0xFF10B981) else Color(0xFF00A86B)
 
     val audioQualityOptions = listOf(
         "Normal (160 kbps)" to "Efficient data usage, AAC standard",
         "High (320 kbps)" to "Rich stereo depth, CD-grade clarity",
         "Hi-Res Lossless (24-bit / 96kHz)" to "Audiophile studio sound resolution",
         "Studio Master (24-bit / 192kHz)" to "Uncompressed bit-perfect master direct"
-    )
-
-    val availableLanguages = listOf(
-        "English (US)",
-        "Español (América Latina)",
-        "Français (France)",
-        "Deutsch (Deutschland)",
-        "日本語 (日本)",
-        "한국어 (대한민국)",
-        "हिन्दी (भारत)",
-        "Italiano (Italia)",
-        "Português (Brasil)"
     )
 
     Box(
@@ -306,55 +297,7 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(24.dp))
             }
 
-            // 4. App Preferences (Languages, Theme)
-            item {
-                Text(
-                    text = "PREFERENCES",
-                    color = secondaryTextColor,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .border(1.dp, borderColor, RoundedCornerShape(16.dp))
-                        .background(cardBg)
-                ) {
-                    SettingActionItem(
-                        icon = Icons.Default.Language,
-                        title = "Language",
-                        subtitle = settings.language,
-                        onClick = { showLanguageDialog = true },
-                        isDarkMode = isDarkMode,
-                        testTag = "language_setting"
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(1.dp)
-                            .background(dividerColor)
-                    )
-
-                    SettingToggleItem(
-                        icon = if (isDarkMode) Icons.Default.DarkMode else Icons.Default.LightMode,
-                        title = "Dark Theme",
-                        subtitle = if (isDarkMode) "Sleek dark OLED theme active" else "Clean light aesthetic active",
-                        checked = isDarkMode,
-                        onCheckedChange = onToggleDarkMode,
-                        isDarkMode = isDarkMode,
-                        testTag = "dark_mode_setting_toggle"
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(24.dp))
-            }
-
-            // 5. About Novi & Version
+            // 4. About Novi & Version
             item {
                 Text(
                     text = "ABOUT NOVI",
@@ -389,10 +332,17 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(6.dp))
                                 .background(accentEmerald.copy(alpha = 0.15f))
+                                .clickable {
+                                    if (!settings.developerMode) {
+                                        showDevPasscodeDialog = true
+                                    } else {
+                                        onSettingsChange(settings.copy(developerMode = false))
+                                    }
+                                }
                                 .padding(horizontal = 8.dp, vertical = 3.dp)
                         ) {
                             Text(
-                                text = "v0.1.0-beta-build.1",
+                                text = if (settings.developerMode) "DEV MODE ON" else "v0.1.0-beta-build.1",
                                 color = accentEmerald,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold
@@ -410,8 +360,93 @@ fun SettingsScreen(
                     )
                 }
 
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+
+            // 5. Developer Mode & Studio Equalizer Controls
+            item {
+                Text(
+                    text = "DEVELOPER OPTIONS",
+                    color = secondaryTextColor,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .border(1.dp, borderColor, RoundedCornerShape(16.dp))
+                        .background(cardBg)
+                ) {
+                    SettingToggleItem(
+                        icon = Icons.Default.Tune,
+                        title = "Developer Mode",
+                        subtitle = if (settings.developerMode) {
+                            "Active • Monochromatic Theme Wallpaper & 6-Band Studio Curve Equalizer"
+                        } else {
+                            "Unlock Custom Theme Wallpaper & Detailed 6-Band Equalizer"
+                        },
+                        checked = settings.developerMode,
+                        onCheckedChange = { isChecked ->
+                            if (isChecked) {
+                                showDevPasscodeDialog = true
+                            } else {
+                                onSettingsChange(settings.copy(developerMode = false))
+                            }
+                        },
+                        isDarkMode = isDarkMode || isDevMode,
+                        testTag = "developer_mode_toggle"
+                    )
+
+                    if (settings.developerMode) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(dividerColor)
+                        )
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(10.dp)
+                                    .clip(CircleShape)
+                                    .background(accentEmerald)
+                            )
+
+                            Text(
+                                text = "Developer mode features activated: Full-screen monochromatic satin-wave background wallpaper and 6-band detailed studio frequency curve equalizer are live.",
+                                color = secondaryTextColor,
+                                fontSize = 12.sp,
+                                lineHeight = 17.sp
+                            )
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(30.dp))
             }
+        }
+
+        // Developer Passcode Dialog
+        if (showDevPasscodeDialog) {
+            DevPasscodeDialog(
+                onDismiss = { showDevPasscodeDialog = false },
+                onSuccess = {
+                    showDevPasscodeDialog = false
+                    onSettingsChange(settings.copy(developerMode = true))
+                },
+                isDarkMode = isDarkMode || isDevMode
+            )
         }
 
         // Quality Selection Dialog
@@ -461,58 +496,6 @@ fun SettingsScreen(
                 confirmButton = {
                     TextButton(onClick = { showQualityDialog = false }) {
                         Text("Done", color = accentEmerald)
-                    }
-                }
-            )
-        }
-
-        // Language Selection Dialog
-        if (showLanguageDialog) {
-            AlertDialog(
-                onDismissRequest = { showLanguageDialog = false },
-                containerColor = if (isDarkMode) Color(0xFF1A1D24) else Color.White,
-                title = { Text("App Language", color = primaryTextColor, fontWeight = FontWeight.Bold) },
-                text = {
-                    LazyColumn(
-                        modifier = Modifier.height(280.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        items(availableLanguages.size) { index ->
-                            val lang = availableLanguages[index]
-                            val isSelected = settings.language == lang
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable {
-                                        onSettingsChange(settings.copy(language = lang))
-                                        showLanguageDialog = false
-                                    }
-                                    .padding(vertical = 10.dp, horizontal = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = lang,
-                                    color = if (isSelected) accentEmerald else primaryTextColor,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    fontSize = 14.sp
-                                )
-                                if (isSelected) {
-                                    Icon(
-                                        imageVector = Icons.Default.Check,
-                                        contentDescription = "Selected",
-                                        tint = accentEmerald,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = { showLanguageDialog = false }) {
-                        Text("Cancel", color = accentEmerald)
                     }
                 }
             )

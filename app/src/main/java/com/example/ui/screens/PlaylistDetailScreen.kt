@@ -97,6 +97,8 @@ fun PlaylistDetailScreen(
     onUpdatePlaylist: (UserPlaylist) -> Unit,
     onBack: () -> Unit,
     isDarkMode: Boolean,
+    isPlaylistLiked: Boolean = false,
+    onToggleLikePlaylist: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var showAddSongsSheet by remember { mutableStateOf(false) }
@@ -248,25 +250,46 @@ fun PlaylistDetailScreen(
                         )
                     }
 
-                    IconButton(
-                        onClick = {
-                            editName = playlist.name
-                            editDesc = playlist.description
-                            editImageUri = playlist.customImageUri
-                            editArtworkType = playlist.artworkType
-                            showEditSheet = true
-                        },
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background((if (isDarkMode) Color.Black else Color.White).copy(alpha = 0.4f))
-                            .testTag("playlist_edit_details_button")
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "Edit Playlist",
-                            tint = primaryText
-                        )
+                        IconButton(
+                            onClick = { onToggleLikePlaylist(playlist.id) },
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background((if (isDarkMode) Color.Black else Color.White).copy(alpha = 0.4f))
+                                .testTag("playlist_like_button")
+                        ) {
+                            val liked = isPlaylistLiked || playlist.isLiked
+                            Icon(
+                                imageVector = if (liked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                contentDescription = if (liked) "Unlike Playlist" else "Like Playlist",
+                                tint = if (liked) Color(0xFFEF4444) else primaryText
+                            )
+                        }
+
+                        IconButton(
+                            onClick = {
+                                editName = playlist.name
+                                editDesc = playlist.description
+                                editImageUri = playlist.customImageUri
+                                editArtworkType = playlist.artworkType
+                                showEditSheet = true
+                            },
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background((if (isDarkMode) Color.Black else Color.White).copy(alpha = 0.4f))
+                                .testTag("playlist_edit_details_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Edit Playlist",
+                                tint = primaryText
+                            )
+                        }
                     }
                 }
             }

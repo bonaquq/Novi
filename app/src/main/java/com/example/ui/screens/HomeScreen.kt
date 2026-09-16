@@ -30,6 +30,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
@@ -104,18 +106,26 @@ fun HomeScreen(
     onPlayPlaylist: (UserPlaylist) -> Unit = {},
     onOpenPlaylist: (UserPlaylist) -> Unit = {},
     onOpenSettings: () -> Unit = {},
+    recentlyListenedTracks: List<Track> = emptyList(),
+    onClearRecentlyListened: () -> Unit = {},
+    onRemoveFromRecentlyListened: (String) -> Unit = {},
+    onToggleLikePlaylist: (String) -> Unit = {},
+    onToggleFollowArtist: (String) -> Unit = {},
+    isArtistFollowed: (String) -> Boolean = { false },
     modifier: Modifier = Modifier,
-    isDarkMode: Boolean = false
+    isDarkMode: Boolean = false,
+    isDeveloperMode: Boolean = false
 ) {
     var selectedCategory by remember { mutableStateOf("All") }
     val categories = SampleMusicData.categories
 
-    val screenBg = if (isDarkMode) Color(0xFF0D0F14) else Color(0xFFF9FAFB)
-    val buttonBg = if (isDarkMode) Color(0xFF1A1D24) else Color.White
-    val borderColor = if (isDarkMode) Color(0xFF2D323F) else Color(0xFFE5E7EB)
-    val iconTint = if (isDarkMode) Color.White else Color(0xFF111827)
-    val textPrimary = if (isDarkMode) Color.White else Color(0xFF111827)
-    val textSecondary = if (isDarkMode) Color(0xFF9CA3AF) else Color(0xFF6B7280)
+    val screenBg = if (isDeveloperMode) Color.Transparent else if (isDarkMode) Color(0xFF0D0F14) else Color(0xFFF9FAFB)
+    val buttonBg = if (isDeveloperMode) Color(0xCC161922) else if (isDarkMode) Color(0xFF1A1D24) else Color.White
+    val borderColor = if (isDeveloperMode) Color(0x33FFFFFF) else if (isDarkMode) Color(0xFF2D323F) else Color(0xFFE5E7EB)
+    val iconTint = if (isDarkMode || isDeveloperMode) Color.White else Color(0xFF111827)
+    val textPrimary = if (isDarkMode || isDeveloperMode) Color.White else Color(0xFF111827)
+    val secondaryTextColor = if (isDarkMode || isDeveloperMode) Color(0xFF9CA3AF) else Color(0xFF6B7280)
+    val textSecondary = secondaryTextColor
 
     var showNotificationsDialog by remember { mutableStateOf(false) }
     var selectedMenuTrack by remember { mutableStateOf<Track?>(null) }
@@ -421,51 +431,203 @@ fun HomeScreen(
                             playlist = playlist,
                             onPlay = { onPlayPlaylist(playlist) },
                             onOpen = { onOpenPlaylist(playlist) },
+                            onToggleLike = { onToggleLikePlaylist(playlist.id) },
                             isDarkMode = isDarkMode
                         )
                     }
                 }
             }
 
-            // 4. Filtered Songs / Recently Listened Section
-            item {
-                Spacer(modifier = Modifier.height(24.dp))
+            // 4. Recently Listened Section (Empty by default with tracks removed, records real plays)
+            if (selectedCategory == "All") {
+                item {
+                    Spacer(modifier = Modifier.height(24.dp))
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 20.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = if (selectedCategory == "All") "Recently listened" else "$selectedCategory Tracks",
-                        color = textPrimary,
-                        fontSize = 19.sp,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "Recently listened",
+                                color = textPrimary,
+                                fontSize = 19.sp,
+                                fontWeight = FontWeight.Bold
+                            )
 
-                    Text(
-                        text = "${filteredTracks.size} tracks",
-                        color = textSecondary,
-                        fontSize = 13.sp
-                    )
+                            if (recentlyListenedTracks.isNotEmpty()) {
+                                Text(
+                                    text = "${recentlyListenedTracks.size} tracks",
+                                    color = textSecondary,
+                                    fontSize = 13.sp
+                                )
+                            }
+                        }
+
+                        if (recentlyListenedTracks.isNotEmpty()) {
+                            TextButton(
+                                onClick = onClearRecentlyListened,
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                modifier = Modifier.testTag("clear_recently_listened_button")
+                            ) {
+                                Text(
+                                    text = "Clear all",
+                                    color = if (isDarkMode) Color(0xFF10B981) else Color(0xFF00A86B),
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
-            }
+                // If recently listened has no tracks (all tracks removed)
+                if (recentlyListenedTracks.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 8.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .border(1.dp, borderColor, RoundedCornerShape(16.dp))
+                                .background(buttonBg)
+                                .padding(vertical = 24.dp, horizontal = 20.dp)
+                                .testTag("recently_listened_empty_state"),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(CircleShape)
+                                        .background(if (isDarkMode) Color(0xFF232732) else Color(0xFFF3F4F6)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.History,
+                                        contentDescription = null,
+                                        tint = textSecondary,
+                                        modifier = Modifier.size(22.dp)
+                                    )
+                                }
+                                Text(
+                                    text = "No recently listened tracks",
+                                    color = textPrimary,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = "Tracks you play will appear here",
+                                    color = textSecondary,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    items(recentlyListenedTracks) { track ->
+                        val isCurrent = currentTrack.id == track.id
+                        TrackRowItem(
+                            track = track,
+                            isCurrent = isCurrent,
+                            isPlaying = isCurrent && isPlaying,
+                            onTrackClick = { onTrackSelected(track) },
+                            onMenuClick = { selectedMenuTrack = track },
+                            isDarkMode = isDarkMode
+                        )
+                    }
+                }
 
-            // List of Tracks
-            items(filteredTracks) { track ->
-                val isCurrent = currentTrack.id == track.id
-                TrackRowItem(
-                    track = track,
-                    isCurrent = isCurrent,
-                    isPlaying = isCurrent && isPlaying,
-                    onTrackClick = { onTrackSelected(track) },
-                    onMenuClick = { selectedMenuTrack = track },
-                    isDarkMode = isDarkMode
-                )
+                // 5. Explore All Tracks Section
+                item {
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Explore Tracks",
+                            color = textPrimary,
+                            fontSize = 19.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Text(
+                            text = "${tracks.size} tracks",
+                            color = textSecondary,
+                            fontSize = 13.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
+
+                items(tracks) { track ->
+                    val isCurrent = currentTrack.id == track.id
+                    TrackRowItem(
+                        track = track,
+                        isCurrent = isCurrent,
+                        isPlaying = isCurrent && isPlaying,
+                        onTrackClick = { onTrackSelected(track) },
+                        onMenuClick = { selectedMenuTrack = track },
+                        isDarkMode = isDarkMode
+                    )
+                }
+            } else {
+                // Category Filtered Tracks Section (e.g. IDM, Rock, Pop)
+                item {
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "$selectedCategory Tracks",
+                            color = textPrimary,
+                            fontSize = 19.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+
+                        Text(
+                            text = "${filteredTracks.size} tracks",
+                            color = textSecondary,
+                            fontSize = 13.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
+
+                items(filteredTracks) { track ->
+                    val isCurrent = currentTrack.id == track.id
+                    TrackRowItem(
+                        track = track,
+                        isCurrent = isCurrent,
+                        isPlaying = isCurrent && isPlaying,
+                        onTrackClick = { onTrackSelected(track) },
+                        onMenuClick = { selectedMenuTrack = track },
+                        isDarkMode = isDarkMode
+                    )
+                }
             }
         }
 
@@ -657,7 +819,18 @@ fun HomeScreen(
                     when (dialogType) {
                         "Settings" -> Text("Audio quality is set to Lossless 24-bit/96kHz. Equalizer and crossfade effects active.")
                         "Updates" -> Text("Novi is up to date (v0.1.0-beta-build.1). What's new: Interactive Equalizer with curve graphs & presets, Lossless streaming, gapless playback, mono audio, and dark theme.")
-                        "Recents" -> Text("Recent activity: Played 'Bone' by Sonic Youth, updated playlist 'Chill IDM', shared lyrics.")
+                        "Recents" -> {
+                            if (recentlyListenedTracks.isEmpty()) {
+                                Text("No recently listened tracks. Play songs to see them in your listening history.")
+                            } else {
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    Text("Recently listened (${recentlyListenedTracks.size}):", fontWeight = FontWeight.SemiBold, color = textPrimary)
+                                    recentlyListenedTracks.take(5).forEach { recentTrack ->
+                                        Text("• ${recentTrack.title} — ${recentTrack.artist}", color = textSecondary)
+                                    }
+                                }
+                            }
+                        }
                         "Support" -> Text("Need help? Reach out to support@novimusic.io or visit our Community Discord.")
                         "About" -> Text("Novi is music, unfinished — on purpose. A beta app for discovery and sharing, built with your feedback.")
                         else -> Text("Information unavailable.")
@@ -703,14 +876,42 @@ fun HomeScreen(
                                 }
                                 .padding(vertical = 8.dp)
                         )
-                        Text(
-                            text = "View Artist: ${track.artist}",
-                            color = textPrimary,
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { selectedMenuTrack = null }
-                                .padding(vertical = 8.dp)
-                        )
+                                .clickable {
+                                    onToggleFollowArtist(track.artist)
+                                }
+                                .padding(vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Artist: ${track.artist}",
+                                color = textPrimary
+                            )
+                            val followed = isArtistFollowed(track.artist)
+                            Text(
+                                text = if (followed) "Following ✓" else "+ Follow",
+                                color = if (followed) (if (isDarkMode) Color(0xFF10B981) else Color(0xFF00A86B)) else (if (isDarkMode) Color(0xFF9CA3AF) else Color(0xFF6B7280)),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                        }
+                        if (recentlyListenedTracks.any { it.id == track.id }) {
+                            Text(
+                                text = "Remove from Recently Listened",
+                                color = Color(0xFFEF4444),
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        onRemoveFromRecentlyListened(track.id)
+                                        selectedMenuTrack = null
+                                    }
+                                    .padding(vertical = 8.dp)
+                            )
+                        }
                     }
                 },
                 confirmButton = {
@@ -754,6 +955,7 @@ fun PlaylistItemCard(
     playlist: UserPlaylist,
     onPlay: () -> Unit,
     onOpen: () -> Unit = onPlay,
+    onToggleLike: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     isDarkMode: Boolean = false
 ) {
@@ -808,6 +1010,28 @@ fun PlaylistItemCard(
                     color = Color.White,
                     fontSize = 9.sp,
                     fontWeight = FontWeight.Bold
+                )
+            }
+        }
+
+        // Top Right Like Button
+        if (onToggleLike != null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(8.dp)
+                    .size(28.dp)
+                    .clip(CircleShape)
+                    .background(Color(0xFF111827).copy(alpha = 0.75f))
+                    .clickable { onToggleLike() }
+                    .testTag("playlist_like_${playlist.id}"),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (playlist.isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    contentDescription = if (playlist.isLiked) "Unlike Playlist" else "Like Playlist",
+                    tint = if (playlist.isLiked) Color(0xFFEF4444) else Color.White,
+                    modifier = Modifier.size(15.dp)
                 )
             }
         }

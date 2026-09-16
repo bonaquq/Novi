@@ -28,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import com.example.ui.components.DeveloperModeBackground
 import com.example.ui.components.ModernBottomBar
 import com.example.ui.screens.FavoritesScreen
 import com.example.ui.screens.HomeScreen
@@ -76,6 +77,7 @@ fun MusicPlayerApp(
 
     val isSettingsOpen by viewModel.isSettingsOpen.collectAsState()
     val selectedPlaylist by viewModel.selectedPlaylist.collectAsState()
+    val recentlyListenedTracks by viewModel.recentlyListenedTracks.collectAsState()
 
     var isSearchActive by remember { mutableStateOf(false) }
 
@@ -90,11 +92,23 @@ fun MusicPlayerApp(
         }
     }
 
+    val audioSettings by viewModel.audioSettings.collectAsState()
+    val isDeveloperMode = audioSettings.developerMode
+
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(if (isDarkMode) Color(0xFF0D0F14) else Color(0xFFF9FAFB))
+            .background(
+                if (isDeveloperMode) Color.Black
+                else if (isDarkMode) Color(0xFF0D0F14)
+                else Color(0xFFF9FAFB)
+            )
     ) {
+        // Monochromatic Satin Ribbon Wallpaper - ONLY rendered when developer mode is enabled!
+        if (isDeveloperMode) {
+            DeveloperModeBackground(modifier = Modifier.fillMaxSize())
+        }
+
         // Screen 1: Welcome / Onboarding Screen ("Music without borders")
         if (showWelcomeScreen) {
             WelcomeScreen(
@@ -110,8 +124,13 @@ fun MusicPlayerApp(
             // Main App Content with Bottom Bar
             val userProfile by viewModel.userProfile.collectAsState()
             val userPlaylists by viewModel.userPlaylists.collectAsState()
-            val audioSettings by viewModel.audioSettings.collectAsState()
+            val likedPlaylistIds by viewModel.likedPlaylistIds.collectAsState()
+            val followedArtists by viewModel.followedArtists.collectAsState()
             val repeatMode by viewModel.repeatMode.collectAsState()
+
+            val likedPlaylists = remember(userPlaylists, likedPlaylistIds) {
+                userPlaylists.filter { it.id in likedPlaylistIds || it.isLiked }
+            }
 
             Box(modifier = Modifier.fillMaxSize()) {
                 if (selectedPlaylist != null) {
@@ -138,7 +157,11 @@ fun MusicPlayerApp(
                         onBack = {
                             viewModel.closePlaylist()
                         },
-                        isDarkMode = isDarkMode
+                        isDarkMode = isDarkMode,
+                        isPlaylistLiked = selectedPlaylist?.id in likedPlaylistIds || selectedPlaylist?.isLiked == true,
+                        onToggleLikePlaylist = {
+                            viewModel.toggleLikePlaylist(it)
+                        }
                     )
                 } else if (isSettingsOpen) {
                     SettingsScreen(
@@ -190,7 +213,14 @@ fun MusicPlayerApp(
                                     viewModel.openPlaylist(playlist)
                                 },
                                 onOpenSettings = { viewModel.openSettings() },
-                                isDarkMode = isDarkMode
+                                recentlyListenedTracks = recentlyListenedTracks,
+                                onClearRecentlyListened = { viewModel.clearRecentlyListened() },
+                                onRemoveFromRecentlyListened = { viewModel.removeTrackFromRecentlyListened(it) },
+                                onToggleLikePlaylist = { viewModel.toggleLikePlaylist(it) },
+                                onToggleFollowArtist = { viewModel.toggleFollowArtist(it) },
+                                isArtistFollowed = { viewModel.isArtistFollowed(it) },
+                                isDarkMode = isDarkMode,
+                                isDeveloperMode = isDeveloperMode
                             )
                         }
                         1 -> {
@@ -215,7 +245,17 @@ fun MusicPlayerApp(
                                 audioSettings = audioSettings,
                                 onUpdateAudioSettings = { viewModel.updateAudioSettings(it) },
                                 onOpenFullSettings = { viewModel.openSettings() },
-                                onLogOut = { viewModel.logOut() }
+                                onLogOut = { viewModel.logOut() },
+                                likedPlaylists = likedPlaylists,
+                                userPlaylists = userPlaylists,
+                                followedArtists = followedArtists,
+                                allTracks = tracks,
+                                onPlaylistSelected = { viewModel.openPlaylist(it) },
+                                onCreatePlaylist = { name, desc ->
+                                    viewModel.createPlaylist(name, desc)
+                                },
+                                onToggleLikePlaylist = { viewModel.toggleLikePlaylist(it) },
+                                onToggleFollowArtist = { viewModel.toggleFollowArtist(it) }
                             )
                         }
                     }
@@ -277,7 +317,9 @@ fun MusicPlayerApp(
                     onPreviousTrack = { viewModel.previousTrack() },
                     onSeek = { viewModel.seekTo(it) },
                     onToggleShuffle = { viewModel.toggleShuffle() },
-                    onToggleRepeat = { viewModel.toggleRepeat() }
+                    onToggleRepeat = { viewModel.toggleRepeat() },
+                    isArtistFollowed = viewModel.isArtistFollowed(currentTrack.artist),
+                    onToggleFollowArtist = { viewModel.toggleFollowArtist(it) }
                 )
             }
         }

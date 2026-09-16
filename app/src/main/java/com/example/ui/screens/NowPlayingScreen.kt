@@ -82,6 +82,8 @@ fun NowPlayingScreen(
     onToggleShuffle: () -> Unit,
     onToggleRepeat: () -> Unit,
     onDeleteTrack: (String) -> Unit = {},
+    isArtistFollowed: Boolean = false,
+    onToggleFollowArtist: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -207,13 +209,51 @@ fun NowPlayingScreen(
             Spacer(modifier = Modifier.height(14.dp))
 
             // 3. Artist Title & Badge Pill
-            Text(
-                text = track.artist,
-                color = textPrimary,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp)
+            ) {
+                Text(
+                    text = track.artist,
+                    color = textPrimary,
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.width(10.dp))
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            if (isArtistFollowed) {
+                                (if (isDarkMode) Color(0xFF10B981) else Color(0xFF00A86B)).copy(alpha = 0.2f)
+                            } else {
+                                if (isDarkMode) Color(0xFF232836) else Color(0xFFE5E7EB)
+                            }
+                        )
+                        .border(
+                            1.dp,
+                            if (isArtistFollowed) (if (isDarkMode) Color(0xFF10B981) else Color(0xFF00A86B)) else Color.Transparent,
+                            RoundedCornerShape(12.dp)
+                        )
+                        .clickable { onToggleFollowArtist(track.artist) }
+                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                        .testTag("now_playing_follow_artist_button"),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (isArtistFollowed) "Following ✓" else "+ Follow",
+                        color = if (isArtistFollowed) (if (isDarkMode) Color(0xFF10B981) else Color(0xFF00A86B)) else textPrimary,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(6.dp))
 
