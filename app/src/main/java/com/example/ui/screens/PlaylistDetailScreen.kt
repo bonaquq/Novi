@@ -132,8 +132,7 @@ fun PlaylistDetailScreen(
             val trackMap = tracks.associateBy { it.id }
             playlist.trackIds.mapNotNull { trackMap[it] }
         } else {
-            // Default sample tracks for this playlist if empty
-            tracks.take(4)
+            emptyList()
         }
     }
 
@@ -386,24 +385,27 @@ fun PlaylistDetailScreen(
                     ) {
                         Button(
                             onClick = onPlayAll,
+                            enabled = playlistTracks.isNotEmpty(),
                             modifier = Modifier
                                 .weight(1f)
                                 .height(50.dp)
                                 .testTag("playlist_play_all_button"),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = accentEmerald
+                                containerColor = accentEmerald,
+                                disabledContainerColor = if (isDarkMode) Color(0xFF1E232F) else Color(0xFFE5E7EB),
+                                disabledContentColor = secondaryText
                             ),
                             shape = RoundedCornerShape(25.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.PlayArrow,
                                 contentDescription = null,
-                                tint = Color.White
+                                tint = if (playlistTracks.isNotEmpty()) Color.White else secondaryText
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "Play",
-                                color = Color.White,
+                                color = if (playlistTracks.isNotEmpty()) Color.White else secondaryText,
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.Bold
                             )
@@ -411,25 +413,27 @@ fun PlaylistDetailScreen(
 
                         OutlinedButton(
                             onClick = onShufflePlay,
+                            enabled = playlistTracks.isNotEmpty(),
                             modifier = Modifier
                                 .weight(1f)
                                 .height(50.dp)
                                 .testTag("playlist_shuffle_button"),
                             shape = RoundedCornerShape(25.dp),
-                            border = BorderStroke(1.5.dp, borderColor),
+                            border = BorderStroke(1.5.dp, if (playlistTracks.isNotEmpty()) borderColor else borderColor.copy(alpha = 0.5f)),
                             colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = primaryText
+                                contentColor = primaryText,
+                                disabledContentColor = secondaryText
                             )
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Shuffle,
                                 contentDescription = null,
-                                tint = primaryText
+                                tint = if (playlistTracks.isNotEmpty()) primaryText else secondaryText
                             )
                             Spacer(modifier = Modifier.width(6.dp))
                             Text(
                                 text = "Shuffle",
-                                color = primaryText,
+                                color = if (playlistTracks.isNotEmpty()) primaryText else secondaryText,
                                 fontSize = 16.sp,
                                 fontWeight = FontWeight.SemiBold
                             )

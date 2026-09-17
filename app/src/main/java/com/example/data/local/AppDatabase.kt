@@ -5,9 +5,14 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [UserAccountEntity::class], version = 1, exportSchema = false)
+@Database(
+    entities = [UserAccountEntity::class, LocalTrackEntity::class],
+    version = 2,
+    exportSchema = false
+)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun userAccountDao(): UserAccountDao
+    abstract fun localTrackDao(): LocalTrackDao
 
     companion object {
         @Volatile

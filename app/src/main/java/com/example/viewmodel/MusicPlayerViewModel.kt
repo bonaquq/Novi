@@ -5,9 +5,11 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.audio.MusicAudioEngine
 import com.example.data.local.AppDatabase
+import com.example.data.local.LocalMusicScanner
 import com.example.data.repository.AuthResult
-import com.example.data.repository.UserAccountRepository
+import com.example.data.repository.LocalMusicRepository
 import com.example.data.repository.MusicBrainzRepository
+import com.example.data.repository.UserAccountRepository
 import com.example.model.ArtworkType
 import com.example.model.AudioAppSettings
 import com.example.model.RepeatMode
@@ -15,22 +17,46 @@ import com.example.model.SampleMusicData
 import com.example.model.Track
 import com.example.model.UserPlaylist
 import com.example.model.UserProfile
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
-class MusicPlayerViewModel(application: Application) : AndroidViewModel(application) {
+enum class MusicSource {
+    LOCAL,
+    ONLINE,
+    ALL
+}
+
+class MusicPlayerViewModel @Inject constructor(
+    application: Application,
+    private val localMusicRepository: LocalMusicRepository
+) : AndroidViewModel(application) {
+
+    constructor(application: Application) : this(
+        application,
+        LocalMusicRepository(
+            LocalMusicScanner(application),
+            AppDatabase.getDatabase(application).localTrackDao()
+        )
+    )
 
     private val database = AppDatabase.getDatabase(application)
     val userAccountRepo = UserAccountRepository(database.userAccountDao())
     val musicBrainzRepo = MusicBrainzRepository()
+    val playbackManager = com.example.playback.PlaybackManager(application)
 
     private val audioEngine = MusicAudioEngine(viewModelScope)
 
@@ -39,6 +65,34 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
 
     private val _tracks = MutableStateFlow(musicBrainzRepo.getCuratedMusicBrainzTracks("all"))
     val tracks: StateFlow<List<Track>> = _tracks.asStateFlow()
+
+    private val _localTracks = MutableStateFlow<List<Track>>(emptyList())
+    val localTracks: StateFlow<List<Track>> = _localTracks.asStateFlow()
+
+    private val _sourceFilter = MutableStateFlow(MusicSource.LOCAL)
+    val sourceFilter: StateFlow<MusicSource> = _sourceFilter.asStateFlow()
+
+    private val _searchQuery = MutableStateFlow("")
+    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+    val filteredTracks: StateFlow<List<Track>> = combine(
+        _sourceFilter,
+        _localTracks,
+        _tracks
+    ) { source, local, online ->
+        when (source) {
+            MusicSource.LOCAL -> local
+            MusicSource.ONLINE -> online
+            MusicSource.ALL -> {
+                val localIds = local.map { it.id }.toSet()
+                local + online.filter { it.id !in localIds }
+            }
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.Eagerly,
+        initialValue = emptyList()
+    )
 
     private val _currentTrack = MutableStateFlow(
         musicBrainzRepo.getCuratedMusicBrainzTracks("all").first()
@@ -62,6 +116,42 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
             userAccountRepo.initializeDefaultAccountsIfNeeded()
             loadTracksFromMusicBrainz("all")
         }
+
+        // Scan and refresh local music repository once on init
+        viewModelScope.launch {
+            localMusicRepository.refresh()
+        }
+
+        // Collect search query debounced by 300ms, querying searchTracks or getAllTracks
+        viewModelScope.launch {
+            @OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
+            _searchQuery
+                .debounce(300)
+                .flatMapLatest { query ->
+                    if (query.isNotBlank()) {
+                        localMusicRepository.searchTracks(query)
+                    } else {
+                        localMusicRepository.getAllTracks()
+                    }
+                }
+                .collect { tracks ->
+                    _localTracks.value = tracks
+                }
+        }
+    }
+
+    fun refreshLocalMusic() {
+        viewModelScope.launch {
+            localMusicRepository.refresh()
+        }
+    }
+
+    fun setSourceFilter(source: MusicSource) {
+        _sourceFilter.value = source
+    }
+
+    fun setSearchQuery(query: String) {
+        _searchQuery.value = query
     }
 
     fun loadTracksFromMusicBrainz(genreOrQuery: String = "all") {
@@ -133,9 +223,6 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
     private val _selectedTab = MutableStateFlow(0)
     val selectedTab: StateFlow<Int> = _selectedTab.asStateFlow()
 
-    private val _searchQuery = MutableStateFlow("")
-    val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
-
     // Whether welcome/onboarding screen is shown (default true when opened)
     private val _showWelcomeScreen = MutableStateFlow(true)
     val showWelcomeScreen: StateFlow<Boolean> = _showWelcomeScreen.asStateFlow()
@@ -201,17 +288,21 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
 
     private var progressJob: Job? = null
 
-    init {
-        // App starts in stopped state; playback begins on user interaction
-    }
-
     fun playTrack(track: Track) {
         _currentTrack.value = track
         _currentPositionSeconds.value = 0
         _isPlaying.value = true
         _isNowPlayingVisible.value = true
         _recentlyListenedTracks.value = listOf(track) + _recentlyListenedTracks.value.filter { it.id != track.id }
-        audioEngine.play(track.baseFrequency, track.tempoBpm)
+        try {
+            if (track.filePath.isNotBlank() || track.id.toLongOrNull() != null) {
+                playbackManager.play(track)
+            } else {
+                audioEngine.play(track.baseFrequency, track.tempoBpm)
+            }
+        } catch (_: Exception) {
+            audioEngine.play(track.baseFrequency, track.tempoBpm)
+        }
         startProgressTracking()
     }
 
@@ -246,7 +337,7 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun nextTrack() {
-        val list = _tracks.value
+        val list = if (filteredTracks.value.isNotEmpty()) filteredTracks.value else _tracks.value
         val currentIndex = list.indexOfFirst { it.id == _currentTrack.value.id }
         val nextIndex = if (_isShuffle.value) {
             (list.indices).filter { it != currentIndex }.randomOrNull() ?: 0
@@ -261,7 +352,7 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
             seekTo(0f)
             return
         }
-        val list = _tracks.value
+        val list = if (filteredTracks.value.isNotEmpty()) filteredTracks.value else _tracks.value
         val currentIndex = list.indexOfFirst { it.id == _currentTrack.value.id }
         val prevIndex = if (currentIndex - 1 < 0) list.size - 1 else currentIndex - 1
         playTrack(list[prevIndex])
@@ -275,6 +366,9 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
 
     fun toggleFavorite(trackId: String) {
         _tracks.value = _tracks.value.map {
+            if (it.id == trackId) it.copy(isFavorite = !it.isFavorite) else it
+        }
+        _localTracks.value = _localTracks.value.map {
             if (it.id == trackId) it.copy(isFavorite = !it.isFavorite) else it
         }
         if (_currentTrack.value.id == trackId) {
@@ -316,10 +410,6 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
 
     fun selectTab(tab: Int) {
         _selectedTab.value = tab
-    }
-
-    fun setSearchQuery(query: String) {
-        _searchQuery.value = query
     }
 
     fun showWelcome() {
@@ -520,21 +610,23 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
     }
 
     fun playPlaylist(playlist: UserPlaylist, shuffle: Boolean = false) {
-        val list = _tracks.value
+        val list = if (filteredTracks.value.isNotEmpty()) filteredTracks.value else _tracks.value
         val playlistTracks = if (playlist.trackIds.isNotEmpty()) {
             val trackMap = list.associateBy { it.id }
             playlist.trackIds.mapNotNull { trackMap[it] }
         } else {
-            list.take(4)
+            emptyList()
         }
+
+        if (playlistTracks.isEmpty()) return
 
         val targetTrack = if (shuffle) {
-            playlistTracks.shuffled().firstOrNull() ?: list.firstOrNull()
+            playlistTracks.shuffled().firstOrNull() ?: return
         } else {
-            playlistTracks.firstOrNull() ?: list.firstOrNull()
+            playlistTracks.firstOrNull() ?: return
         }
 
-        targetTrack?.let { playTrack(it) }
+        playTrack(targetTrack)
     }
 
     private fun startProgressTracking() {
@@ -557,7 +649,7 @@ class MusicPlayerViewModel(application: Application) : AndroidViewModel(applicat
                             nextTrack()
                         }
                         RepeatMode.OFF -> {
-                            val list = _tracks.value
+                            val list = if (filteredTracks.value.isNotEmpty()) filteredTracks.value else _tracks.value
                             val currentIndex = list.indexOfFirst { it.id == _currentTrack.value.id }
                             if (currentIndex < list.size - 1) {
                                 nextTrack()

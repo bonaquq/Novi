@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlaylistPlay
@@ -549,7 +550,7 @@ fun HomeScreen(
                     }
                 }
 
-                // 5. Explore All Tracks Section
+                // 5. Explore Tracks Section (Songs removed)
                 item {
                     Spacer(modifier = Modifier.height(24.dp))
 
@@ -568,7 +569,7 @@ fun HomeScreen(
                         )
 
                         Text(
-                            text = "${tracks.size} tracks",
+                            text = "0 tracks",
                             color = textSecondary,
                             fontSize = 13.sp
                         )
@@ -577,16 +578,49 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.height(10.dp))
                 }
 
-                items(tracks) { track ->
-                    val isCurrent = currentTrack.id == track.id
-                    TrackRowItem(
-                        track = track,
-                        isCurrent = isCurrent,
-                        isPlaying = isCurrent && isPlaying,
-                        onTrackClick = { onTrackSelected(track) },
-                        onMenuClick = { selectedMenuTrack = track },
-                        isDarkMode = isDarkMode
-                    )
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 20.dp, vertical = 8.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .border(1.dp, borderColor, RoundedCornerShape(16.dp))
+                            .background(buttonBg)
+                            .padding(vertical = 24.dp, horizontal = 20.dp)
+                            .testTag("explore_tracks_empty_state"),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(CircleShape)
+                                    .background(if (isDarkMode) Color(0xFF232732) else Color(0xFFF3F4F6)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.MusicNote,
+                                    contentDescription = null,
+                                    tint = textSecondary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                            Text(
+                                text = "No explore tracks",
+                                color = textPrimary,
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text(
+                                text = "Songs under explore tracks have been removed",
+                                color = textSecondary,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
                 }
             } else {
                 // Category Filtered Tracks Section (e.g. IDM, Rock, Pop)

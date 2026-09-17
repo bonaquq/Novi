@@ -16,7 +16,7 @@ android {
   defaultConfig {
     applicationId = "com.aistudio.musicplayer.vdubsp"
     minSdk = 24
-    targetSdk = 36
+    targetSdk = 34
     versionCode = 1
     versionName = "1.0"
 
@@ -95,10 +95,17 @@ dependencies {
   implementation(libs.androidx.lifecycle.runtime.compose)
   implementation(libs.androidx.lifecycle.runtime.ktx)
   implementation(libs.androidx.lifecycle.viewmodel.compose)
-  // implementation(libs.androidx.navigation.compose)
+  implementation(libs.androidx.navigation.compose)
   implementation(libs.androidx.room.ktx)
   implementation(libs.androidx.room.runtime)
-  implementation(libs.coil.compose)
+  implementation("androidx.media3:media3-exoplayer:1.4.0")
+  implementation("androidx.media3:media3-session:1.4.0")
+  implementation("androidx.media3:media3-ui:1.4.0")
+  implementation("io.coil-kt:coil-compose:2.7.0")
+  implementation("androidx.work:work-runtime-ktx:2.9.1")
+  implementation("androidx.hilt:hilt-work:1.2.0")
+  implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
+  implementation("com.google.dagger:hilt-android:2.51.1")
   implementation(libs.converter.moshi)
   implementation(libs.firebase.ai)
   // Uncomment to use Firestore:

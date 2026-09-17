@@ -33,7 +33,13 @@ data class Track(
     val baseFrequency: Float = 110f,
     val tempoBpm: Int = 120,
     val isFavorite: Boolean = false,
-    val customArtworkUri: String? = null
+    val customArtworkUri: String? = null,
+    val albumId: Long = 0L,
+    val filePath: String = "",
+    val mimeType: String = "audio/mpeg",
+    val sizeBytes: Long = 0L,
+    val dateAdded: Long = 0L,
+    val artworkUri: String? = null
 ) {
     val formattedDuration: String
         get() {
